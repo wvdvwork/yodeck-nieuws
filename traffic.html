@@ -3,66 +3,134 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Live Verkeer NL</title>
+<title>Verkeer Nederland</title>
 
 <style>
+
 body{
 margin:0;
-font-family:Arial;
-background:#020051;
+font-family:Arial,Helvetica,sans-serif;
+background:radial-gradient(circle at top,#0a0f2c,#020051);
 color:white;
 overflow:hidden;
 }
 
+/* HEADER */
 #header{
-padding:30px;
-font-size:44px;
-font-weight:bold;
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:35px 45px 10px 45px;
 }
 
+#title{
+font-size:54px;
+font-weight:800;
+letter-spacing:1px;
+}
+
+#clock{
+font-size:32px;
+opacity:0.8;
+}
+
+/* SUB */
+#sub{
+padding:0 45px;
+opacity:0.7;
+font-size:18px;
+margin-bottom:20px;
+}
+
+/* LIST */
 #list{
-padding:0 30px;
+padding:0 45px;
 display:flex;
 flex-direction:column;
-gap:15px;
+gap:14px;
 }
 
+/* CARD */
 .row{
 display:flex;
 justify-content:space-between;
-padding:18px;
+align-items:center;
+
+padding:20px 22px;
+border-radius:14px;
+
 background:rgba(255,255,255,0.08);
-border-radius:10px;
+backdrop-filter:blur(10px);
+border:1px solid rgba(255,255,255,0.08);
+
 font-size:26px;
+
+transition:0.3s;
 }
 
-.bad{ color:#ff4d4d; font-weight:bold; }
-.mid{ color:#ffb300; font-weight:bold; }
-.good{ color:#3ddc84; font-weight:bold; }
+.row:hover{
+transform:scale(1.01);
+background:rgba(255,255,255,0.12);
+}
 
-#status{
+/* LEFT */
+.left{
+display:flex;
+align-items:center;
+gap:12px;
+}
+
+/* BADGES */
+.badge{
+padding:6px 14px;
+border-radius:999px;
+font-size:18px;
+font-weight:bold;
+}
+
+.good{ background:#1db954; }
+.mid{ background:#ffb300; }
+.bad{ background:#ff4d4d; }
+
+/* FOOTER */
+#footer{
 position:absolute;
-bottom:20px;
-left:30px;
-opacity:0.7;
+bottom:15px;
+left:45px;
+opacity:0.6;
+font-size:16px;
 }
-</style>
 
+</style>
 </head>
 
 <body>
 
-<div id="header">🚗 Live Verkeer Nederland</div>
+<div id="header">
+<div id="title">🚗 Verkeer Nederland</div>
+<div id="clock"></div>
+</div>
+
+<div id="sub">Live verkeerssituatie • automatisch bijgewerkt</div>
 
 <div id="list"></div>
 
-<div id="status">Powered by TomTom Traffic API</div>
+<div id="footer">Powered by TomTom Traffic API</div>
 
 <script>
 
 const API_KEY = "vvEtiN2Y02CaiVAJCQxov6PsTW7w5gny";
 
-/* vaste NL punten (grote snelwegen) */
+/* klok */
+function clock(){
+const d = new Date();
+document.getElementById("clock").innerText =
+d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+}
+setInterval(clock,1000);
+clock();
+
+/* vaste punten */
 const points = [
 { name:"A1 Amsterdam → Amersfoort", lat:52.37, lon:4.90 },
 { name:"A2 Amsterdam → Utrecht", lat:52.10, lon:5.12 },
@@ -88,28 +156,38 @@ const data = await res.json();
 const cur = data.flowSegmentData.currentSpeed;
 const free = data.flowSegmentData.freeFlowSpeed;
 
-let ratio = cur / free;
+let ratio = cur/free;
 
 let cls = "good";
-let label = "vrij";
+let label = "VRIJ";
 
-if(ratio < 0.6){ cls="bad"; label="file"; }
-else if(ratio < 0.85){ cls="mid"; label="druk"; }
+if(ratio < 0.6){ cls="bad"; label="FILE"; }
+else if(ratio < 0.85){ cls="mid"; label="DRUK"; }
 
 html += `
 <div class="row">
-<div>${p.name}</div>
-<div class="${cls}">${label} (${cur} km/h)</div>
+
+<div class="left">
+<span>🛣️</span>
+<span>${p.name}</span>
+</div>
+
+<div class="badge ${cls}">
+${label} • ${cur} km/h
+</div>
+
 </div>
 `;
 
 }catch(e){
+
 html += `
 <div class="row">
-<div>${p.name}</div>
-<div class="mid">geen data</div>
+<div class="left">⚠️ ${p.name}</div>
+<div class="badge mid">geen data</div>
 </div>
 `;
+
 }
 
 }
