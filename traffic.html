@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Verkeer NL</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background:#020051;
+color:white;
+overflow:hidden;
+}
+
+#header{
+padding:30px;
+font-size:44px;
+font-weight:bold;
+}
+
+#list{
+padding:0 30px;
+display:flex;
+flex-direction:column;
+gap:15px;
+}
+
+.row{
+display:flex;
+justify-content:space-between;
+padding:18px;
+background:rgba(255,255,255,0.08);
+border-radius:10px;
+font-size:26px;
+}
+
+.bad{ color:#ff4d4d; font-weight:bold; }
+.mid{ color:#ffb300; font-weight:bold; }
+.good{ color:#3ddc84; font-weight:bold; }
+
+#status{
+position:absolute;
+bottom:20px;
+left:30px;
+opacity:0.7;
+}
+</style>
+
+</head>
+
+<body>
+
+<div id="header">🚗 Live Verkeer Nederland</div>
+
+<div id="list"></div>
+
+<div id="status">Powered by TomTom Traffic API</div>
+
+<script>
+
+const API_KEY = "vvEtiN2Y02CaiVAJCQxov6PsTW7w5gny";
+
+/* vaste NL punten (grote snelwegen) */
+const points = [
+{ name:"A1 Amsterdam → Amersfoort", lat:52.37, lon:4.90 },
+{ name:"A2 Amsterdam → Utrecht", lat:52.10, lon:5.12 },
+{ name:"A12 Den Haag → Utrecht", lat:52.08, lon:4.31 },
+{ name:"A27 Breda → Utrecht", lat:51.85, lon:4.80 },
+{ name:"A50 Arnhem → Eindhoven", lat:51.98, lon:5.91 }
+];
+
+async function load(){
+
+let html = "";
+
+for(let p of points){
+
+try{
+
+const url =
+`https://api.tomtom.com/traffic/services/4/flowSegmentData/relative0/10/json?point=${p.lat},${p.lon}&key=${API_KEY}`;
+
+const res = await fetch(url);
+const data = await res.json();
+
+const cur = data.flowSegmentData.currentSpeed;
+const free = data.flowSegmentData.freeFlowSpeed;
+
+let ratio = cur / free;
+
+let cls = "good";
+let label = "vrij";
+
+if(ratio < 0.6){ cls="bad"; label="file"; }
+else if(ratio < 0.85){ cls="mid"; label="druk"; }
+
+html += `
+<div class="row">
+<div>${p.name}</div>
+<div class="${cls}">${label} (${cur} km/h)</div>
+</div>
+`;
+
+}catch(e){
+html += `
+<div class="row">
+<div>${p.name}</div>
+<div class="mid">geen data</div>
+</div>
+`;
+}
+
+}
+
+document.getElementById("list").innerHTML = html;
+
+}
+
+load();
+setInterval(load,60000);
+
+</script>
+
+</body>
+</html>
