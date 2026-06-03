@@ -3,16 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, height=device-height">
-<title>Multi News PRO</title>
+<title>Nieuws Dashboard</title>
 
 <style>
 html,body{
 margin:0;
+padding:0;
 width:100%;
 height:100%;
 overflow:hidden;
 font-family:Arial;
-background:#111;
+background:#0b0f1a;
+color:white;
 }
 
 /* BACKGROUND */
@@ -22,48 +24,75 @@ width:100%;
 height:100%;
 background-size:cover;
 background-position:center;
-filter:contrast(1.05) saturate(1.1);
+filter:brightness(0.7);
 transition:1s ease;
 }
 
-/* OVERLAY */
+/* DARK OVERLAY */
 #overlay{
 position:absolute;
 width:100%;
 height:100%;
-background:linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,.15));
+background:linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.2));
 }
 
-/* LOGO */
-#logo{
+/* TOP BAR */
+#topbar{
 position:absolute;
-top:25px;
-left:25px;
-width:120px;
-height:auto;
+top:20px;
+left:20px;
+right:20px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+#logo{
+height:55px;
+}
+
+#time{
+font-size:28px;
+opacity:0.8;
 }
 
 /* CARD */
 #card{
 position:absolute;
-right:50px;
-bottom:90px;
+right:60px;
+bottom:120px;
 width:650px;
-background:white;
-padding:30px;
-box-shadow:0 10px 40px rgba(0,0,0,.5);
+background:rgba(255,255,255,0.08);
+backdrop-filter:blur(12px);
+padding:25px;
+border-radius:16px;
+border:1px solid rgba(255,255,255,0.1);
 }
 
 #title{
 font-size:34px;
 font-weight:bold;
-margin-bottom:15px;
+margin-bottom:10px;
 }
 
 #desc{
-font-size:22px;
-color:#333;
+font-size:20px;
+opacity:0.9;
 line-height:1.4;
+}
+
+/* SOURCE TAG */
+#source{
+margin-top:15px;
+display:flex;
+align-items:center;
+gap:10px;
+font-size:16px;
+opacity:0.8;
+}
+
+.sourceLogo{
+height:22px;
 }
 
 /* TICKER */
@@ -74,7 +103,6 @@ left:0;
 width:100%;
 height:45px;
 background:#020051;
-color:white;
 display:flex;
 align-items:center;
 overflow:hidden;
@@ -82,25 +110,17 @@ overflow:hidden;
 
 #tickerText{
 white-space:nowrap;
-display:inline-block;
 padding-left:100%;
-animation:scroll 45s linear infinite;
-font-size:20px;
+animation:scroll 40s linear infinite;
+font-size:18px;
+color:white;
 }
 
 @keyframes scroll{
-0% { transform: translateX(0); }
-100% { transform: translateX(-100%); }
+0%{transform:translateX(0);}
+100%{transform:translateX(-100%);}
 }
 
-/* VIDEO */
-#video{
-position:absolute;
-width:100%;
-height:100%;
-display:none;
-border:none;
-}
 </style>
 </head>
 
@@ -109,13 +129,20 @@ border:none;
 <div id="bg"></div>
 <div id="overlay"></div>
 
-<img id="logo" src="https://upload.wikimedia.org/wikipedia/commons/d/d9/Nu-nl-logo.png">
-
-<iframe id="video"></iframe>
+<div id="topbar">
+<img id="logo" src="https://upload.wikimedia.org/wikipedia/commons/2/2e/NU.nl_logo.svg">
+<div id="time"></div>
+</div>
 
 <div id="card">
 <div id="title">Laden...</div>
 <div id="desc"></div>
+
+<div id="source">
+<img class="sourceLogo" id="sourceLogo">
+<span id="sourceText"></span>
+</div>
+
 </div>
 
 <div id="ticker">
@@ -125,55 +152,66 @@ border:none;
 <script>
 
 const FEEDS = [
-"https://www.nu.nl/rss",
-"https://feeds.nos.nl/nosnieuwsalgemeen",
-"https://feeds.bbci.co.uk/news/rss.xml",
-"https://www.rtlnieuws.nl/rss.xml"
+{
+name:"NOS",
+logo:"https://upload.wikimedia.org/wikipedia/commons/2/20/NOS_logo.svg",
+url:"https://feeds.nos.nl/nosnieuwsalgemeen"
+},
+{
+name:"RTL Nieuws",
+logo:"https://upload.wikimedia.org/wikipedia/commons/9/9a/RTL_Nieuws_logo.svg",
+url:"https://www.rtlnieuws.nl/rss.xml"
+}
 ];
 
 let items = [];
 let i = 0;
 
-/* LOAD MULTI RSS */
+/* CLOCK */
+function clock(){
+const d = new Date();
+document.getElementById("time").innerText =
+d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+}
+setInterval(clock,1000);
+clock();
+
+/* LOAD RSS */
 async function loadAll(){
 
 let all = [];
 
-for(let url of FEEDS){
+for(let f of FEEDS){
 try{
-let res = await fetch("https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent(url));
+
+let res = await fetch("https://api.rss2json.com/v1/api.json?rss_url="+encodeURIComponent(f.url));
 let data = await res.json();
 
 if(data.items){
+data.items.forEach(it=>{
+it.sourceName = f.name;
+it.sourceLogo = f.logo;
+});
 all = all.concat(data.items);
 }
+
 }catch(e){}
+
 }
 
-/* shuffle + mix */
-items = all.sort(() => Math.random() - 0.5);
+/* shuffle */
+items = all.sort(()=>Math.random()-0.5);
 
 show();
 setInterval(show,12000);
+
 }
 
-/* BEST IMAGE PICKER */
+/* IMAGE FIX */
 function getImage(item){
-
 return item.enclosure?.link ||
 item.thumbnail ||
 "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1920&q=80";
-}
-
-/* VIDEO DETECT */
-function getVideo(url){
-if(!url) return null;
-
-let m =
-url.match(/youtu\.be\/([a-zA-Z0-9_-]+)/) ||
-url.match(/v=([a-zA-Z0-9_-]+)/);
-
-return m ? m[1] : null;
 }
 
 /* SHOW */
@@ -181,39 +219,27 @@ function show(){
 
 const item = items[i];
 
-const video = document.getElementById("video");
-video.style.display = "none";
-video.src = "";
-
-/* IMAGE */
-let img = getImage(item);
-
 document.getElementById("bg").style.backgroundImage =
-`url(${img})`;
+`url(${getImage(item)})`;
 
-/* TEXT */
 document.getElementById("title").innerText = item.title;
 
 document.getElementById("desc").innerHTML =
 (item.description || "")
 .replace(/<[^>]*>/g,"")
-.substring(0,200);
+.substring(0,220);
+
+/* SOURCE */
+document.getElementById("sourceLogo").src = item.sourceLogo;
+document.getElementById("sourceText").innerText = item.sourceName;
 
 /* TICKER */
 document.getElementById("tickerText").innerText =
-items.slice(0,15).map(x => x.title).join("   •   ");
-
-/* VIDEO */
-let vid = getVideo(item.link);
-
-if(vid){
-video.src = `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&controls=0&loop=1`;
-video.style.display = "block";
-document.getElementById("bg").style.backgroundImage = "none";
-}
+items.slice(0,12).map(x=>x.title).join("   •   ");
 
 i++;
-if(i >= items.length) i = 0;
+if(i>=items.length) i=0;
+
 }
 
 loadAll();
