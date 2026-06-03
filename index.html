@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, height=device-height">
-<title>Nieuws scherm</title>
+
+<title>NU Nieuws OG</title>
 
 <style>
 html,body{
 margin:0;
-padding:0;
-width:100%;
 height:100%;
+width:100%;
 overflow:hidden;
-font-family:Arial, Helvetica, sans-serif;
+font-family:Arial;
 background:black;
 }
 
@@ -38,11 +38,11 @@ top:30px;
 left:30px;
 width:90px;
 height:90px;
+border-radius:50%;
 background:#0b3dd9;
 color:white;
 font-size:40px;
 font-weight:bold;
-border-radius:50%;
 display:flex;
 align-items:center;
 justify-content:center;
@@ -67,15 +67,6 @@ margin-bottom:15px;
 #desc{
 font-size:22px;
 color:#333;
-line-height:1.4;
-}
-
-#clock{
-position:absolute;
-top:40px;
-right:50px;
-color:white;
-font-size:28px;
 }
 
 #ticker{
@@ -89,6 +80,14 @@ padding:10px;
 font-size:18px;
 white-space:nowrap;
 overflow:hidden;
+}
+
+#clock{
+position:absolute;
+top:40px;
+right:50px;
+color:white;
+font-size:28px;
 }
 </style>
 </head>
@@ -106,7 +105,7 @@ overflow:hidden;
 <div id="desc"></div>
 </div>
 
-<div id="ticker">Nieuws wordt geladen...</div>
+<div id="ticker"></div>
 
 <script>
 
@@ -121,40 +120,54 @@ document.getElementById("clock").innerText =
 new Date().toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
 },1000);
 
-// RSS laden via publieke JSON proxy
+// RSS via proxy
 async function load(){
 const res = await fetch("https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent(RSS));
 const data = await res.json();
 
 items = data.items || [];
 
-start();
-}
-
-function start(){
 show();
 setInterval(show,12000);
 }
 
-function show(){
+// OG IMAGE SCRAPER
+async function getOGImage(url){
+
+try{
+const res = await fetch(url);
+const html = await res.text();
+
+let match = html.match(/property="og:image"\scontent="(.*?)"/i);
+
+if(match && match[1]){
+return match[1];
+}
+
+}catch(e){}
+
+return "https://picsum.photos/1920/1080?random=" + Math.random();
+}
+
+async function show(){
 
 const item = items[i];
 
-// afbeelding
-let img = item.thumbnail || "";
+// titel + tekst
+document.getElementById("title").innerText = item.title;
 
-if(img){
-document.getElementById("bg").style.backgroundImage = `url(${img})`;
-}
-
-// tekst
-document.getElementById("title").innerText = item.title || "";
 document.getElementById("desc").innerHTML =
 (item.description || "").replace(/<[^>]*>/g,"").substring(0,200);
 
 // ticker
 document.getElementById("ticker").innerText =
 items.slice(0,5).map(x => x.title).join(" • ");
+
+// IMAGE = OG IMAGE (belangrijk deel)
+let img = await getOGImage(item.link);
+
+document.getElementById("bg").style.backgroundImage =
+`url(${img})`;
 
 i++;
 if(i >= items.length) i = 0;
