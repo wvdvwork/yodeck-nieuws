@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, height=device-height">
-<title>NU Nieuws PRO</title>
+<title>NU Nieuws Display</title>
 
 <style>
 html,body{
@@ -12,9 +12,10 @@ width:100%;
 height:100%;
 overflow:hidden;
 font-family:Arial;
-background:#000;
+background:#111;
 }
 
+/* ACHTERGROND */
 #bg{
 position:absolute;
 width:100%;
@@ -24,6 +25,7 @@ background-position:center;
 transition:opacity 1s ease;
 }
 
+/* OVERLAY */
 #overlay{
 position:absolute;
 width:100%;
@@ -35,20 +37,12 @@ background:linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,.1));
 #logo{
 position:absolute;
 top:25px;
-right:25px;
-width:80px;
-height:80px;
-background:#0b3dd9;
-border-radius:50%;
-display:flex;
-align-items:center;
-justify-content:center;
-color:white;
-font-size:36px;
-font-weight:bold;
+left:25px;
+width:120px;
+height:auto;
 }
 
-/* TEKST KAART */
+/* TEKST CARD */
 #card{
 position:absolute;
 right:50px;
@@ -68,9 +62,10 @@ margin-bottom:15px;
 #desc{
 font-size:22px;
 color:#333;
+line-height:1.4;
 }
 
-/* BLAUWE NU BALK */
+/* BLAUWE BALK */
 #ticker{
 position:absolute;
 bottom:0;
@@ -97,19 +92,24 @@ border:none;
 
 <body>
 
+<!-- ACHTERGROND -->
 <div id="bg"></div>
 <div id="overlay"></div>
 
-<div id="logo">NU</div>
+<!-- NU LOGO -->
+<img id="logo" src="https://upload.wikimedia.org/wikipedia/commons/d/d9/Nu-nl-logo.png">
 
+<!-- VIDEO -->
 <iframe id="video"></iframe>
 
+<!-- TEKST -->
 <div id="card">
 <div id="title">Laden...</div>
 <div id="desc"></div>
 </div>
 
-<div id="ticker"></div>
+<!-- TICKER -->
+<div id="ticker">Nieuws wordt geladen...</div>
 
 <script>
 
@@ -118,24 +118,36 @@ const RSS = "https://www.nu.nl/rss";
 let items = [];
 let i = 0;
 
-/* RSS LOADER */
+/* RSS LOAD */
 async function load(){
 const res = await fetch("https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent(RSS));
 const data = await res.json();
 
 items = data.items || [];
+
 show();
 setInterval(show,12000);
 }
 
-/* VIDEO DETECT (YouTube) */
+/* IMAGE SELECTOR (stabiel) */
+function getImage(item){
+return item.enclosure?.link ||
+       item.thumbnail ||
+       "https://picsum.photos/1920/1080?random=" + Math.random();
+}
+
+/* YOUTUBE DETECT */
 function getYouTubeId(url){
 if(!url) return null;
-let m = url.match(/youtu\.be\/([a-zA-Z0-9_-]+)/) ||
-        url.match(/v=([a-zA-Z0-9_-]+)/);
+
+let m =
+url.match(/youtu\.be\/([a-zA-Z0-9_-]+)/) ||
+url.match(/v=([a-zA-Z0-9_-]+)/);
+
 return m ? m[1] : null;
 }
 
+/* SHOW SLIDE */
 function show(){
 
 const item = items[i];
@@ -145,22 +157,23 @@ const video = document.getElementById("video");
 video.style.display = "none";
 video.src = "";
 
-/* IMAGE (OG fallback via thumbnail API-safe) */
-let img =
-item.thumbnail ||
-"https://picsum.photos/1920/1080?random=" + i;
+/* IMAGE */
+let img = getImage(item);
 
 document.getElementById("bg").style.backgroundImage =
 `url(${img})`;
 
 /* TEXT */
 document.getElementById("title").innerText = item.title;
+
 document.getElementById("desc").innerHTML =
-(item.description || "").replace(/<[^>]*>/g,"").substring(0,180);
+(item.description || "")
+.replace(/<[^>]*>/g,"")
+.substring(0,200);
 
 /* TICKER */
 document.getElementById("ticker").innerText =
-items.slice(0,6).map(x => x.title).join(" • ");
+items.slice(0,7).map(x => x.title).join(" • ");
 
 /* VIDEO MODE */
 let vid = getYouTubeId(item.link);
