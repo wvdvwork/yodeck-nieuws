@@ -17,15 +17,14 @@ background:#0b0f1a;
 color:white;
 }
 
-/* BACKGROUND */
+/* BACKGROUND (NO ANIMATED SWITCHING FILTERS) */
 #bg{
 position:absolute;
 width:100%;
 height:100%;
 background-size:cover;
 background-position:center;
-filter:brightness(0.7);
-transition:1s ease;
+transition:opacity 1s ease;
 }
 
 /* DARK OVERLAY */
@@ -45,14 +44,15 @@ right:20px;
 display:flex;
 justify-content:space-between;
 align-items:center;
+z-index:2;
 }
 
 #logo{
-height:55px;
+height:50px;
 }
 
 #time{
-font-size:28px;
+font-size:26px;
 opacity:0.8;
 }
 
@@ -61,38 +61,39 @@ opacity:0.8;
 position:absolute;
 right:60px;
 bottom:120px;
-width:650px;
+width:620px;
 background:rgba(255,255,255,0.08);
-backdrop-filter:blur(12px);
-padding:25px;
-border-radius:16px;
+backdrop-filter:blur(8px);
+padding:22px;
+border-radius:14px;
 border:1px solid rgba(255,255,255,0.1);
+z-index:2;
 }
 
 #title{
-font-size:34px;
+font-size:32px;
 font-weight:bold;
 margin-bottom:10px;
 }
 
 #desc{
-font-size:20px;
+font-size:18px;
 opacity:0.9;
 line-height:1.4;
 }
 
-/* SOURCE TAG */
+/* SOURCE */
 #source{
-margin-top:15px;
+margin-top:12px;
 display:flex;
 align-items:center;
 gap:10px;
-font-size:16px;
+font-size:15px;
 opacity:0.8;
 }
 
 .sourceLogo{
-height:22px;
+height:20px;
 }
 
 /* TICKER */
@@ -101,7 +102,7 @@ position:absolute;
 bottom:0;
 left:0;
 width:100%;
-height:45px;
+height:40px;
 background:#020051;
 display:flex;
 align-items:center;
@@ -111,9 +112,8 @@ overflow:hidden;
 #tickerText{
 white-space:nowrap;
 padding-left:100%;
-animation:scroll 40s linear infinite;
-font-size:18px;
-color:white;
+animation:scroll 60s linear infinite;
+font-size:16px;
 }
 
 @keyframes scroll{
@@ -130,7 +130,7 @@ color:white;
 <div id="overlay"></div>
 
 <div id="topbar">
-<img id="logo" src="https://github.com/wvdvwork/yodeck-nieuws/blob/a49fe33504e2682e01a90fbc406b1a53245888b2/global-news-4305.svg">
+<img id="logo" src="https://upload.wikimedia.org/wikipedia/commons/2/20/NOS_logo.svg">
 <div id="time"></div>
 </div>
 
@@ -176,12 +176,13 @@ d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
 setInterval(clock,1000);
 clock();
 
-/* LOAD RSS */
+/* LOAD RSS ONCE */
 async function loadAll(){
 
 let all = [];
 
 for(let f of FEEDS){
+
 try{
 
 let res = await fetch("https://api.rss2json.com/v1/api.json?rss_url="+encodeURIComponent(f.url));
@@ -191,54 +192,66 @@ if(data.items){
 data.items.forEach(it=>{
 it.sourceName = f.name;
 it.sourceLogo = f.logo;
+all.push(it);
 });
-all = all.concat(data.items);
 }
 
 }catch(e){}
 
 }
 
-/* shuffle */
+/* shuffle once */
 items = all.sort(()=>Math.random()-0.5);
 
+/* start loop */
 show();
-setInterval(show,12000);
+setInterval(show,15000); // minder refresh = smoother
 
 }
 
-/* IMAGE FIX */
+/* SAFE IMAGE */
 function getImage(item){
 return item.enclosure?.link ||
 item.thumbnail ||
 "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1920&q=80";
 }
 
-/* SHOW */
+/* SHOW ITEM (NO HEAVY RELOADS) */
 function show(){
 
 const item = items[i];
 
-document.getElementById("bg").style.backgroundImage =
-`url(${getImage(item)})`;
+const bg = document.getElementById("bg");
+
+/* fade trick instead of hard switch */
+bg.style.opacity = 0;
+
+setTimeout(()=>{
+
+bg.style.backgroundImage = `url(${getImage(item)})`;
+bg.style.opacity = 1;
+
+},500);
 
 document.getElementById("title").innerText = item.title;
 
 document.getElementById("desc").innerHTML =
 (item.description || "")
 .replace(/<[^>]*>/g,"")
-.substring(0,220);
+.substring(0,200);
 
-/* SOURCE */
+/* source */
 document.getElementById("sourceLogo").src = item.sourceLogo;
 document.getElementById("sourceText").innerText = item.sourceName;
 
-/* TICKER */
+/* ticker (only updates when needed) */
+if(i === 0){
 document.getElementById("tickerText").innerText =
-items.slice(0,12).map(x=>x.title).join("   •   ");
+items.slice(0,10).map(x=>x.title).join("   •   ");
+}
 
 i++;
-if(i>=items.length) i=0;
+if(i >= items.length) i = 0;
 
 }
 
