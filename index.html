@@ -7,6 +7,7 @@
 <title>Nieuws Dashboard</title>
 
 <style>
+
 html,body{
 margin:0;
 padding:0;
@@ -18,52 +19,66 @@ background:#0b1220;
 color:white;
 }
 
-#bg{
-position:absolute;
-width:100%;
-height:100%;
-background:
-linear-gradient(135deg,#0b1220,#020051);
+body{
+background:linear-gradient(135deg,#0b1220,#020051);
 }
 
-#overlay{
-position:absolute;
-width:100%;
-height:100%;
-background:
-linear-gradient(to top,
-rgba(0,0,0,0.8),
-rgba(0,0,0,0.25));
-}
+/* TOPBAR */
 
 #topbar{
 position:absolute;
 top:25px;
 right:35px;
-z-index:2;
+z-index:10;
 }
 
 #time{
-font-size:30px;
+font-size:32px;
 font-weight:bold;
 opacity:0.9;
 }
 
+/* CARD */
+
 #card{
 position:absolute;
+top:80px;
 left:60px;
 right:60px;
-bottom:100px;
+bottom:70px;
 
-background:rgba(15,20,40,0.92);
-
-padding:30px;
-border-radius:18px;
+background:rgba(15,20,40,0.95);
 
 border:1px solid rgba(255,255,255,0.08);
+border-radius:18px;
 
-z-index:2;
+padding:30px;
+
+display:flex;
+flex-direction:column;
+
+box-sizing:border-box;
 }
+
+/* IMAGE */
+
+#newsImageContainer{
+width:100%;
+height:320px;
+overflow:hidden;
+border-radius:14px;
+background:#111827;
+margin-bottom:25px;
+}
+
+#newsImage{
+width:100%;
+height:100%;
+object-fit:cover;
+display:none;
+}
+
+/* TITLE */
 
 #title{
 font-size:42px;
@@ -72,11 +87,16 @@ line-height:1.2;
 margin-bottom:18px;
 }
 
+/* DESCRIPTION */
+
 #desc{
 font-size:22px;
 line-height:1.5;
-opacity:0.9;
+opacity:0.92;
+flex:1;
 }
+
+/* SOURCE */
 
 #source{
 margin-top:20px;
@@ -84,10 +104,12 @@ font-size:18px;
 opacity:0.7;
 }
 
+/* TICKER */
+
 #ticker{
 position:absolute;
-bottom:0;
 left:0;
+bottom:0;
 width:100%;
 height:50px;
 
@@ -97,8 +119,6 @@ display:flex;
 align-items:center;
 
 overflow:hidden;
-
-z-index:3;
 }
 
 #tickerText{
@@ -116,24 +136,28 @@ transform:translateX(0);
 transform:translateX(-100%);
 }
 }
+
 </style>
 </head>
 
 <body>
-
-<div id="bg"></div>
-<div id="overlay"></div>
 
 <div id="topbar">
 <div id="time"></div>
 </div>
 
 <div id="card">
+
+<div id="newsImageContainer">
+<img id="newsImage" src="" alt="">
+</div>
+
 <div id="title">Nieuws laden...</div>
 
 <div id="desc"></div>
 
 <div id="source"></div>
+
 </div>
 
 <div id="ticker">
@@ -143,20 +167,24 @@ transform:translateX(-100%);
 <script>
 
 const FEEDS = [
+
 {
 name:"NOS",
 url:"https://feeds.nos.nl/nosnieuwsalgemeen"
 },
+
 {
 name:"RTL Nieuws",
 url:"https://www.rtlnieuws.nl/rss.xml"
 }
+
 ];
 
 let items = [];
 let currentIndex = 0;
 
-/* KLOK */
+/* CLOCK */
+
 function updateClock(){
 
 const now = new Date();
@@ -175,7 +203,20 @@ minute:'2-digit'
 updateClock();
 setInterval(updateClock,60000);
 
-/* RSS LADEN */
+/* IMAGE */
+
+function getImage(item){
+
+return (
+item.enclosure?.link ||
+item.thumbnail ||
+""
+);
+
+}
+
+/* RSS */
+
 async function loadAll(){
 
 let allItems = [];
@@ -212,9 +253,7 @@ console.log("Feed fout:",feed.name);
 
 }
 
-items = allItems.sort(
-() => Math.random() - 0.5
-);
+items = allItems.sort(() => Math.random() - 0.5);
 
 updateTicker();
 
@@ -225,6 +264,7 @@ showNews();
 }
 
 /* TICKER */
+
 function updateTicker(){
 
 document.getElementById("tickerText").innerText =
@@ -235,12 +275,29 @@ items
 
 }
 
-/* NIEUWS TONEN */
+/* SHOW NEWS */
+
 function showNews(){
 
 if(items.length === 0) return;
 
 const item = items[currentIndex];
+
+const image = getImage(item);
+
+const img =
+document.getElementById("newsImage");
+
+if(image){
+
+img.src = image;
+img.style.display = "block";
+
+}else{
+
+img.style.display = "none";
+
+}
 
 document.getElementById("title").innerText =
 item.title;
@@ -248,7 +305,7 @@ item.title;
 document.getElementById("desc").innerText =
 (item.description || "")
 .replace(/<[^>]+>/g,'')
-.substring(0,250);
+.substring(0,300);
 
 document.getElementById("source").innerText =
 "Bron: " + item.sourceName;
@@ -262,10 +319,11 @@ currentIndex = 0;
 }
 
 /* START */
+
 loadAll();
 
-setInterval(loadAll,900000);   // 15 min
-setInterval(showNews,30000);   // 30 sec
+setInterval(loadAll,900000);   // 15 minuten RSS refresh
+setInterval(showNews,30000);   // 30 seconden per bericht
 
 </script>
 
