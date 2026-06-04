@@ -18,9 +18,11 @@ background:#0b1220;
 color:white;
 }
 
+/* GRID */
+
 #container{
 display:grid;
-grid-template-columns: 2fr 1fr;
+grid-template-columns: 2.2fr 1fr;
 grid-template-rows: 1fr 1fr;
 height:100vh;
 gap:20px;
@@ -39,21 +41,35 @@ overflow:hidden;
 }
 
 .newsItem{
-margin-bottom:20px;
-padding-bottom:15px;
+display:flex;
+gap:12px;
+margin-bottom:18px;
+padding-bottom:14px;
 border-bottom:1px solid rgba(255,255,255,0.08);
 }
 
+.newsImg{
+width:90px;
+height:65px;
+border-radius:10px;
+object-fit:cover;
+background:#111;
+}
+
+.newsContent{
+flex:1;
+}
+
 .newsTitle{
-font-size:22px;
+font-size:18px;
 font-weight:bold;
-margin-bottom:6px;
+margin-bottom:4px;
 }
 
 .newsDesc{
-font-size:16px;
+font-size:14px;
 opacity:0.8;
-line-height:1.4;
+line-height:1.3;
 }
 
 /* KLOK */
@@ -65,16 +81,27 @@ align-items:center;
 }
 
 #clockCircle{
-width:160px;
-height:160px;
+width:180px;
+height:180px;
 border-radius:50%;
-border:4px solid rgba(255,255,255,0.2);
+border:4px solid rgba(255,255,255,0.25);
 display:flex;
+flex-direction:column;
 justify-content:center;
 align-items:center;
+background:rgba(255,255,255,0.05);
+text-align:center;
+}
+
+#clockTime{
 font-size:34px;
 font-weight:bold;
-background:rgba(255,255,255,0.05);
+}
+
+#clockDate{
+font-size:14px;
+opacity:0.8;
+margin-top:4px;
 }
 
 /* WEER */
@@ -88,16 +115,20 @@ flex-direction:column;
 justify-content:center;
 align-items:center;
 text-align:center;
+gap:6px;
+}
+
+#weatherIcon{
+font-size:42px;
 }
 
 #weatherTemp{
-font-size:40px;
+font-size:34px;
 font-weight:bold;
 }
 
 #weatherDesc{
-opacity:0.8;
-margin-top:6px;
+opacity:0.85;
 }
 
 </style>
@@ -114,11 +145,15 @@ margin-top:6px;
 
 <!-- KLOK -->
 <div id="clockBox">
-<div id="clockCircle">--:--</div>
+<div id="clockCircle">
+<div id="clockTime">--:--</div>
+<div id="clockDate">--</div>
+</div>
 </div>
 
 <!-- WEER -->
 <div id="weather">
+<div id="weatherIcon">🌤</div>
 <div id="weatherTemp">--°C</div>
 <div id="weatherDesc">Weer laden...</div>
 </div>
@@ -128,10 +163,19 @@ margin-top:6px;
 <script>
 
 /* CLOCK */
+
 function updateClock(){
+
 const now = new Date();
-document.getElementById("clockCircle").innerText =
+
+const days = ["Zo","Ma","Di","Wo","Do","Vr","Za"];
+
+document.getElementById("clockTime").innerText =
 now.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+
+document.getElementById("clockDate").innerText =
+days[now.getDay()] + " " + now.getDate() + "-" + (now.getMonth()+1);
+
 }
 
 updateClock();
@@ -140,17 +184,15 @@ setInterval(updateClock,1000);
 /* NEWS */
 
 const FEEDS = [
-{
-name:"NOS",
-url:"https://feeds.nos.nl/nosnieuwsalgemeen"
-},
-{
-name:"RTL",
-url:"https://www.rtlnieuws.nl/rss.xml"
-}
+{ name:"NOS", url:"https://feeds.nos.nl/nosnieuwsalgemeen" },
+{ name:"RTL", url:"https://www.rtlnieuws.nl/rss.xml" }
 ];
 
 let newsItems = [];
+
+function getImage(item){
+return item.enclosure?.link || item.thumbnail || "";
+}
 
 async function loadNews(){
 
@@ -168,12 +210,10 @@ encodeURIComponent(f.url)
 const data = await res.json();
 
 if(data.items){
-
 data.items.forEach(i=>{
 i.sourceName = f.name;
 all.push(i);
 });
-
 }
 
 }catch(e){}
@@ -201,8 +241,11 @@ newsItems.forEach(n=>{
 
 html += `
 <div class="newsItem">
+<img class="newsImg" src="${getImage(n)}" onerror="this.style.display='none'">
+<div class="newsContent">
 <div class="newsTitle">${n.title}</div>
-<div class="newsDesc">${clean(n.description).substring(0,180)}</div>
+<div class="newsDesc">${clean(n.description).substring(0,120)}</div>
+</div>
 </div>
 `;
 
@@ -237,6 +280,14 @@ Math.round(w.temperature) + "°C";
 
 document.getElementById("weatherDesc").innerText =
 "Windsnelheid " + w.windspeed + " km/h";
+
+/* simpele icon mapping */
+let icon = "🌤";
+if(w.windspeed > 40) icon = "🌬";
+if(w.temperature < 5) icon = "❄️";
+if(w.weathercode >= 61) icon = "🌧";
+
+document.getElementById("weatherIcon").innerText = icon;
 
 }catch(e){
 
