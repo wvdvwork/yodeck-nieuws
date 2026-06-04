@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="nl">
 <head>
@@ -12,115 +13,109 @@ padding:0;
 width:100%;
 height:100%;
 overflow:hidden;
-font-family:Arial;
-background:#0b0f1a;
+font-family:Arial,Helvetica,sans-serif;
+background:#0b1220;
 color:white;
 }
 
-/* BACKGROUND (NO ANIMATED SWITCHING FILTERS) */
 #bg{
 position:absolute;
 width:100%;
 height:100%;
-background-size:cover;
-background-position:center;
-transition:opacity 1s ease;
+background:
+linear-gradient(135deg,#0b1220,#020051);
 }
 
-/* DARK OVERLAY */
 #overlay{
 position:absolute;
 width:100%;
 height:100%;
-background:linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.2));
+background:
+linear-gradient(to top,
+rgba(0,0,0,0.8),
+rgba(0,0,0,0.25));
 }
 
-/* TOP BAR */
 #topbar{
 position:absolute;
-top:20px;
-left:20px;
-right:20px;
-display:flex;
-justify-content:space-between;
-align-items:center;
+top:25px;
+right:35px;
 z-index:2;
 }
 
-#logo{
-height:50px;
-}
-
 #time{
-font-size:26px;
-opacity:0.8;
+font-size:30px;
+font-weight:bold;
+opacity:0.9;
 }
 
-/* CARD */
 #card{
 position:absolute;
+left:60px;
 right:60px;
-bottom:120px;
-width:620px;
-background:rgba(255,255,255,0.08);
-backdrop-filter:blur(8px);
-padding:22px;
-border-radius:14px;
-border:1px solid rgba(255,255,255,0.1);
+bottom:100px;
+
+background:rgba(15,20,40,0.92);
+
+padding:30px;
+border-radius:18px;
+
+border:1px solid rgba(255,255,255,0.08);
+
 z-index:2;
 }
 
 #title{
-font-size:32px;
-font-weight:bold;
-margin-bottom:10px;
+font-size:42px;
+font-weight:700;
+line-height:1.2;
+margin-bottom:18px;
 }
 
 #desc{
-font-size:18px;
+font-size:22px;
+line-height:1.5;
 opacity:0.9;
-line-height:1.4;
 }
 
-/* SOURCE */
 #source{
-margin-top:12px;
-display:flex;
-align-items:center;
-gap:10px;
-font-size:15px;
-opacity:0.8;
+margin-top:20px;
+font-size:18px;
+opacity:0.7;
 }
 
-.sourceLogo{
-height:20px;
-}
-
-/* TICKER */
 #ticker{
 position:absolute;
 bottom:0;
 left:0;
 width:100%;
-height:40px;
+height:50px;
+
 background:#020051;
+
 display:flex;
 align-items:center;
+
 overflow:hidden;
+
+z-index:3;
 }
 
 #tickerText{
 white-space:nowrap;
 padding-left:100%;
-animation:scroll 60s linear infinite;
-font-size:16px;
+animation:scroll 90s linear infinite;
+font-size:18px;
 }
 
 @keyframes scroll{
-0%{transform:translateX(0);}
-100%{transform:translateX(-100%);}
+0%{
+transform:translateX(0);
 }
-
+100%{
+transform:translateX(-100%);
+}
+}
 </style>
 </head>
 
@@ -130,19 +125,15 @@ font-size:16px;
 <div id="overlay"></div>
 
 <div id="topbar">
-<img id="logo" src="https://upload.wikimedia.org/wikipedia/commons/2/20/NOS_logo.svg">
 <div id="time"></div>
 </div>
 
 <div id="card">
-<div id="title">Laden...</div>
+<div id="title">Nieuws laden...</div>
+
 <div id="desc"></div>
 
-<div id="source">
-<img class="sourceLogo" id="sourceLogo">
-<span id="sourceText"></span>
-</div>
-
+<div id="source"></div>
 </div>
 
 <div id="ticker">
@@ -154,110 +145,130 @@ font-size:16px;
 const FEEDS = [
 {
 name:"NOS",
-logo:"https://upload.wikimedia.org/wikipedia/commons/b/b9/NOS_logo.svg",
 url:"https://feeds.nos.nl/nosnieuwsalgemeen"
 },
 {
 name:"RTL Nieuws",
-logo:"https://upload.wikimedia.org/wikipedia/commons/a/a8/RTL_Nieuws_logo_2024.svg",
 url:"https://www.rtlnieuws.nl/rss.xml"
 }
 ];
 
 let items = [];
-let i = 0;
+let currentIndex = 0;
 
-/* CLOCK */
-function clock(){
-const d = new Date();
+/* KLOK */
+function updateClock(){
+
+const now = new Date();
+
 document.getElementById("time").innerText =
-d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+now.toLocaleTimeString(
+'nl-NL',
+{
+hour:'2-digit',
+minute:'2-digit'
 }
-setInterval(clock,1000);
-clock();
+);
 
-/* LOAD RSS ONCE */
+}
+
+updateClock();
+setInterval(updateClock,60000);
+
+/* RSS LADEN */
 async function loadAll(){
 
-let all = [];
+let allItems = [];
 
-for(let f of FEEDS){
+for(const feed of FEEDS){
 
 try{
 
-let res = await fetch("https://api.rss2json.com/v1/api.json?rss_url="+encodeURIComponent(f.url));
-let data = await res.json();
+const response =
+await fetch(
+"https://api.rss2json.com/v1/api.json?rss_url=" +
+encodeURIComponent(feed.url)
+);
+
+const data = await response.json();
 
 if(data.items){
-data.items.forEach(it=>{
-it.sourceName = f.name;
-it.sourceLogo = f.logo;
-all.push(it);
+
+data.items.forEach(item => {
+
+item.sourceName = feed.name;
+
+allItems.push(item);
+
 });
-}
-
-}catch(e){}
 
 }
 
-/* shuffle once */
-items = all.sort(()=>Math.random()-0.5);
+}catch(error){
 
-/* start loop */
-show();
-setInterval(show,15000); // minder refresh = smoother
+console.log("Feed fout:",feed.name);
 
 }
 
-/* SAFE IMAGE */
-function getImage(item){
-return item.enclosure?.link ||
-item.thumbnail ||
-"https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1920&q=80";
 }
 
-/* SHOW ITEM (NO HEAVY RELOADS) */
-function show(){
+items = allItems.sort(
+() => Math.random() - 0.5
+);
 
-const item = items[i];
+updateTicker();
 
-const bg = document.getElementById("bg");
+if(currentIndex === 0){
+showNews();
+}
 
-/* fade trick instead of hard switch */
-bg.style.opacity = 0;
+}
 
-setTimeout(()=>{
+/* TICKER */
+function updateTicker(){
 
-bg.style.backgroundImage = `url(${getImage(item)})`;
-bg.style.opacity = 1;
-
-},500);
-
-document.getElementById("title").innerText = item.title;
-
-document.getElementById("desc").innerHTML =
-(item.description || "")
-.replace(/<[^>]*>/g,"")
-.substring(0,200);
-
-/* source */
-document.getElementById("sourceLogo").src = item.sourceLogo;
-document.getElementById("sourceText").innerText = item.sourceName;
-
-/* ticker (only updates when needed) */
-if(i === 0){
 document.getElementById("tickerText").innerText =
-items.slice(0,10).map(x=>x.title).join("   •   ");
+items
+.slice(0,15)
+.map(item => item.title)
+.join("   •   ");
+
 }
 
-i++;
-if(i >= items.length) i = 0;
+/* NIEUWS TONEN */
+function showNews(){
+
+if(items.length === 0) return;
+
+const item = items[currentIndex];
+
+document.getElementById("title").innerText =
+item.title;
+
+document.getElementById("desc").innerText =
+(item.description || "")
+.replace(/<[^>]+>/g,'')
+.substring(0,250);
+
+document.getElementById("source").innerText =
+"Bron: " + item.sourceName;
+
+currentIndex++;
+
+if(currentIndex >= items.length){
+currentIndex = 0;
+}
 
 }
 
+/* START */
 loadAll();
+
+setInterval(loadAll,900000);   // 15 min
+setInterval(showNews,30000);   // 30 sec
 
 </script>
 
 </body>
 </html>
+```
