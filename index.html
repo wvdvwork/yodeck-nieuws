@@ -57,7 +57,7 @@ display:flex;
 flex-direction:column;
 }
 
-/* IMAGE (groter + iets smaller breedte effect) */
+/* IMAGE */
 
 #newsImageContainer{
 width:100%;
@@ -84,7 +84,7 @@ line-height:1.2;
 margin-bottom:12px;
 }
 
-/* TEXT (MEER RUIMTE + GROTER) */
+/* TEXT */
 
 #desc{
 font-size:26px;
@@ -114,18 +114,20 @@ background:#020051;
 display:flex;
 align-items:center;
 overflow:hidden;
+white-space:nowrap;
 }
 
 #tickerText{
+display:inline-block;
 white-space:nowrap;
-padding-left:100%;
-animation:scroll 90s linear infinite;
 font-size:18px;
+padding-left:100%;
+animation:scroll 40s linear infinite;
 }
 
 @keyframes scroll{
-0%{transform:translateX(0);}
-100%{transform:translateX(-100%);}
+0%{ transform:translateX(0); }
+100%{ transform:translateX(-50%); }
 }
 
 </style>
@@ -186,24 +188,16 @@ function getImage(item){
 return item.enclosure?.link || item.thumbnail || "";
 }
 
-/* 🧠 EXTRA: FULL ARTICLE TEXT (belangrijk) */
-async function getFullArticle(url){
+/* CLEAN TEXT (BELANGRIJK) */
 
-try{
+function cleanText(text){
 
-// simpele readable proxy (lichtgewicht)
-const res = await fetch("https://r.jina.ai/http://" + url.replace("https://",""));
-const text = await res.text();
-
-return text
-.replace(/[#*_]/g,'')
-.replace(/\s+/g,' ')
-.trim()
-.substring(0,1200);
-
-}catch(e){
-return "";
-}
+return (text || "")
+.replace(/<[^>]*>/g,' ')        // HTML weg
+.replace(/https?:\/\/\S+/g,' ') // links weg
+.replace(/Lees meer|Read more/gi,' ')
+.replace(/\s+/g,' ')            // dubbele spaties
+.trim();
 
 }
 
@@ -247,18 +241,23 @@ showNews();
 
 }
 
-/* TICKER */
+/* TICKER (SEAMLESS) */
 
 function updateTicker(){
 
-document.getElementById("tickerText").innerText =
-items.slice(0,15).map(i=>i.title).join("   •   ");
+const text = items
+.slice(0,20)
+.map(i => i.title)
+.join("   •   ");
+
+document.getElementById("tickerText").innerHTML =
+text + "   •   " + text;
 
 }
 
 /* SHOW NEWS */
 
-async function showNews(){
+function showNews(){
 
 if(items.length === 0) return;
 
@@ -276,19 +275,12 @@ img.style.display = "none";
 
 document.getElementById("title").innerText = item.title;
 
-/* 👉 HIER: veel meer tekst dan RSS */
-let fullText = item.description || "";
-
-if(item.link){
-fullText = await getFullArticle(item.link);
-}
+/* 👉 HIER NU SCHONE TEKST */
+const rawText =
+item.content || item.description || "";
 
 document.getElementById("desc").innerText =
-fullText
-.replace(/<[^>]+>/g,'')
-.replace(/\s+/g,' ')
-.trim()
-.substring(0,1500);
+cleanText(rawText).substring(0,1800);
 
 document.getElementById("source").innerText =
 "Bron: " + item.sourceName;
@@ -305,8 +297,8 @@ currentIndex = 0;
 
 loadAll();
 
-setInterval(loadAll,900000);   // 15 min
-setInterval(showNews,35000);   // iets rustiger voor Pi
+setInterval(loadAll,900000);   // 15 min RSS refresh
+setInterval(showNews,35000);   // wissel nieuws
 
 </script>
 
