@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nieuws Dashboard</title>
+<title>Dashboard</title>
 
 <style>
 
@@ -18,88 +18,86 @@ background:#0b1220;
 color:white;
 }
 
-body{
-background:linear-gradient(135deg,#0b1220,#020051);
-}
-
-/* TOPBAR */
-
-#topbar{
-position:absolute;
-top:20px;
-right:30px;
-z-index:10;
-}
-
-#time{
-font-size:32px;
-font-weight:bold;
-opacity:.9;
-}
-
-/* CARD */
-
-#card{
-position:absolute;
-top:60px;
-left:40px;
-right:40px;
-bottom:40px;
-
-background:rgba(15,20,40,.96);
-border-radius:18px;
-border:1px solid rgba(255,255,255,.08);
-
-padding:25px;
+#container{
+display:grid;
+grid-template-columns: 2fr 1fr;
+grid-template-rows: 1fr 1fr;
+height:100vh;
+gap:20px;
+padding:20px;
 box-sizing:border-box;
+}
 
+/* NIEUWS */
+
+#news{
+grid-row:1 / span 2;
+background:rgba(255,255,255,0.04);
+border-radius:16px;
+padding:20px;
+overflow:hidden;
+}
+
+.newsItem{
+margin-bottom:20px;
+padding-bottom:15px;
+border-bottom:1px solid rgba(255,255,255,0.08);
+}
+
+.newsTitle{
+font-size:22px;
+font-weight:bold;
+margin-bottom:6px;
+}
+
+.newsDesc{
+font-size:16px;
+opacity:0.8;
+line-height:1.4;
+}
+
+/* KLOK */
+
+#clockBox{
+display:flex;
+justify-content:center;
+align-items:center;
+}
+
+#clockCircle{
+width:160px;
+height:160px;
+border-radius:50%;
+border:4px solid rgba(255,255,255,0.2);
+display:flex;
+justify-content:center;
+align-items:center;
+font-size:34px;
+font-weight:bold;
+background:rgba(255,255,255,0.05);
+}
+
+/* WEER */
+
+#weather{
+background:rgba(255,255,255,0.05);
+border-radius:16px;
+padding:20px;
 display:flex;
 flex-direction:column;
+justify-content:center;
+align-items:center;
+text-align:center;
 }
 
-/* IMAGE */
-
-#newsImageContainer{
-width:100%;
-height:340px;
-border-radius:14px;
-overflow:hidden;
-background:#111827;
-margin-bottom:18px;
+#weatherTemp{
+font-size:40px;
+font-weight:bold;
 }
 
-#newsImage{
-width:100%;
-height:100%;
-object-fit:cover;
-display:none;
-}
-
-/* TITLE */
-
-#title{
-font-size:38px;
-font-weight:700;
-line-height:1.2;
-margin-bottom:12px;
-}
-
-/* TEXT */
-
-#desc{
-font-size:26px;
-line-height:1.5;
-opacity:.95;
-flex:1;
-overflow:hidden;
-}
-
-/* SOURCE */
-
-#source{
-margin-top:12px;
-font-size:18px;
-opacity:.7;
+#weatherDesc{
+opacity:0.8;
+margin-top:6px;
 }
 
 </style>
@@ -107,23 +105,39 @@ opacity:.7;
 
 <body>
 
-<div id="topbar">
-<div id="time"></div>
+<div id="container">
+
+<!-- NIEUWS -->
+<div id="news">
+<div class="newsItem">Laden...</div>
 </div>
 
-<div id="card">
-
-<div id="newsImageContainer">
-<img id="newsImage">
+<!-- KLOK -->
+<div id="clockBox">
+<div id="clockCircle">--:--</div>
 </div>
 
-<div id="title">Nieuws laden...</div>
-<div id="desc"></div>
-<div id="source"></div>
+<!-- WEER -->
+<div id="weather">
+<div id="weatherTemp">--°C</div>
+<div id="weatherDesc">Weer laden...</div>
+</div>
 
 </div>
 
 <script>
+
+/* CLOCK */
+function updateClock(){
+const now = new Date();
+document.getElementById("clockCircle").innerText =
+now.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+}
+
+updateClock();
+setInterval(updateClock,1000);
+
+/* NEWS */
 
 const FEEDS = [
 {
@@ -131,59 +145,33 @@ name:"NOS",
 url:"https://feeds.nos.nl/nosnieuwsalgemeen"
 },
 {
-name:"RTL Nieuws",
+name:"RTL",
 url:"https://www.rtlnieuws.nl/rss.xml"
 }
 ];
 
-let items = [];
-let currentIndex = 0;
+let newsItems = [];
 
-/* CLOCK */
-function updateClock(){
-const now = new Date();
-document.getElementById("time").innerText =
-now.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
-}
-updateClock();
-setInterval(updateClock,60000);
-
-/* IMAGE */
-function getImage(item){
-return item.enclosure?.link || item.thumbnail || "";
-}
-
-/* CLEAN TEXT */
-function cleanText(text){
-return (text || "")
-.replace(/<[^>]*>/g,' ')
-.replace(/https?:\/\/\S+/g,' ')
-.replace(/Lees meer|Read more/gi,' ')
-.replace(/\s+/g,' ')
-.trim();
-}
-
-/* LOAD RSS */
-async function loadAll(){
+async function loadNews(){
 
 let all = [];
 
-for(const feed of FEEDS){
+for(const f of FEEDS){
 
 try{
 
 const res = await fetch(
 "https://api.rss2json.com/v1/api.json?rss_url=" +
-encodeURIComponent(feed.url)
+encodeURIComponent(f.url)
 );
 
 const data = await res.json();
 
 if(data.items){
 
-data.items.forEach(it=>{
-it.sourceName = feed.name;
-all.push(it);
+data.items.forEach(i=>{
+i.sourceName = f.name;
+all.push(i);
 });
 
 }
@@ -192,55 +180,75 @@ all.push(it);
 
 }
 
-items = all.sort(()=>Math.random()-0.5);
+newsItems = all.slice(0,8);
 
-if(currentIndex === 0){
-showNews();
+renderNews();
+
+}
+
+function clean(text){
+return (text || "")
+.replace(/<[^>]*>/g,' ')
+.replace(/\s+/g,' ')
+.trim();
+}
+
+function renderNews(){
+
+let html = "";
+
+newsItems.forEach(n=>{
+
+html += `
+<div class="newsItem">
+<div class="newsTitle">${n.title}</div>
+<div class="newsDesc">${clean(n.description).substring(0,180)}</div>
+</div>
+`;
+
+});
+
+document.getElementById("news").innerHTML = html;
+
+}
+
+loadNews();
+setInterval(loadNews,600000);
+
+/* WEATHER GENEMUIDEN */
+
+async function loadWeather(){
+
+try{
+
+const lat = 52.62;
+const lon = 6.04;
+
+const url =
+`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
+
+const res = await fetch(url);
+const data = await res.json();
+
+const w = data.current_weather;
+
+document.getElementById("weatherTemp").innerText =
+Math.round(w.temperature) + "°C";
+
+document.getElementById("weatherDesc").innerText =
+"Windsnelheid " + w.windspeed + " km/h";
+
+}catch(e){
+
+document.getElementById("weatherDesc").innerText =
+"Geen weerdata";
+
 }
 
 }
 
-/* SHOW NEWS */
-function showNews(){
-
-if(items.length === 0) return;
-
-const item = items[currentIndex];
-
-const img = document.getElementById("newsImage");
-const image = getImage(item);
-
-if(image){
-img.src = image;
-img.style.display = "block";
-}else{
-img.style.display = "none";
-}
-
-document.getElementById("title").innerText = item.title;
-
-const raw =
-item.content || item.description || "";
-
-document.getElementById("desc").innerText =
-cleanText(raw).substring(0,1800);
-
-document.getElementById("source").innerText =
-"Bron: " + item.sourceName;
-
-currentIndex++;
-
-if(currentIndex >= items.length){
-currentIndex = 0;
-}
-
-}
-
-/* START */
-loadAll();
-
-setInterval(loadAll,900000);
-setInterval(showNews,15000);
+loadWeather();
+setInterval(loadWeather,600000);
 
 </script>
 
