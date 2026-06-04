@@ -1,9 +1,8 @@
-```html
 <!DOCTYPE html>
 <html lang="nl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, height=device-height">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nieuws Dashboard</title>
 
 <style>
@@ -16,59 +15,57 @@ height:100%;
 overflow:hidden;
 font-family:Arial,Helvetica,sans-serif;
 background:#0b1220;
-color:white;
+color:#fff;
 }
 
 body{
 background:linear-gradient(135deg,#0b1220,#020051);
 }
 
-/* TOPBAR */
+/* KLOK */
 
 #topbar{
 position:absolute;
-top:25px;
+top:20px;
 right:35px;
-z-index:10;
+z-index:100;
 }
 
 #time{
 font-size:32px;
 font-weight:bold;
-opacity:0.9;
+opacity:.9;
 }
 
-/* CARD */
+/* HOOFDCARD */
 
 #card{
 position:absolute;
-top:80px;
-left:60px;
-right:60px;
+top:70px;
+left:40px;
+right:40px;
 bottom:70px;
 
-background:rgba(15,20,40,0.95);
+background:rgba(15,20,40,.96);
 
-border:1px solid rgba(255,255,255,0.08);
 border-radius:18px;
+border:1px solid rgba(255,255,255,.08);
 
-padding:30px;
+padding:25px;
+box-sizing:border-box;
 
 display:flex;
 flex-direction:column;
-
-box-sizing:border-box;
 }
 
-/* IMAGE */
+/* FOTO */
 
 #newsImageContainer{
-width:100%;
-height:320px;
-overflow:hidden;
+height:220px;
 border-radius:14px;
+overflow:hidden;
 background:#111827;
-margin-bottom:25px;
+margin-bottom:20px;
 }
 
 #newsImage{
@@ -78,46 +75,44 @@ object-fit:cover;
 display:none;
 }
 
-/* TITLE */
+/* TITEL */
 
 #title{
-font-size:42px;
+font-size:40px;
 font-weight:700;
 line-height:1.2;
-margin-bottom:18px;
+margin-bottom:15px;
 }
 
-/* DESCRIPTION */
+/* BESCHRIJVING */
 
 #desc{
-font-size:22px;
-line-height:1.5;
-opacity:0.92;
+font-size:24px;
+line-height:1.45;
+opacity:.95;
+overflow:hidden;
 flex:1;
 }
 
-/* SOURCE */
+/* BRON */
 
 #source{
-margin-top:20px;
+margin-top:15px;
 font-size:18px;
-opacity:0.7;
+opacity:.7;
 }
 
 /* TICKER */
 
 #ticker{
 position:absolute;
-left:0;
 bottom:0;
+left:0;
 width:100%;
 height:50px;
-
 background:#020051;
-
 display:flex;
 align-items:center;
-
 overflow:hidden;
 }
 
@@ -149,7 +144,7 @@ transform:translateX(-100%);
 <div id="card">
 
 <div id="newsImageContainer">
-<img id="newsImage" src="" alt="">
+<img id="newsImage">
 </div>
 
 <div id="title">Nieuws laden...</div>
@@ -167,23 +162,20 @@ transform:translateX(-100%);
 <script>
 
 const FEEDS = [
-
 {
 name:"NOS",
 url:"https://feeds.nos.nl/nosnieuwsalgemeen"
 },
-
 {
 name:"RTL Nieuws",
 url:"https://www.rtlnieuws.nl/rss.xml"
 }
-
 ];
 
 let items = [];
 let currentIndex = 0;
 
-/* CLOCK */
+/* KLOK */
 
 function updateClock(){
 
@@ -203,19 +195,23 @@ minute:'2-digit'
 updateClock();
 setInterval(updateClock,60000);
 
-/* IMAGE */
+/* FOTO */
 
 function getImage(item){
 
-return (
-item.enclosure?.link ||
-item.thumbnail ||
-""
-);
+if(item.enclosure && item.enclosure.link){
+return item.enclosure.link;
+}
+
+if(item.thumbnail){
+return item.thumbnail;
+}
+
+return "";
 
 }
 
-/* RSS */
+/* RSS LADEN */
 
 async function loadAll(){
 
@@ -225,8 +221,7 @@ for(const feed of FEEDS){
 
 try{
 
-const response =
-await fetch(
+const response = await fetch(
 "https://api.rss2json.com/v1/api.json?rss_url=" +
 encodeURIComponent(feed.url)
 );
@@ -235,17 +230,16 @@ const data = await response.json();
 
 if(data.items){
 
-data.items.forEach(item => {
+data.items.forEach(item=>{
 
 item.sourceName = feed.name;
-
 allItems.push(item);
 
 });
 
 }
 
-}catch(error){
+}catch(e){
 
 console.log("Feed fout:",feed.name);
 
@@ -275,18 +269,18 @@ items
 
 }
 
-/* SHOW NEWS */
+/* NIEUWS TONEN */
 
 function showNews(){
 
-if(items.length === 0) return;
+if(items.length === 0){
+return;
+}
 
 const item = items[currentIndex];
 
+const img = document.getElementById("newsImage");
 const image = getImage(item);
-
-const img =
-document.getElementById("newsImage");
 
 if(image){
 
@@ -305,7 +299,8 @@ item.title;
 document.getElementById("desc").innerText =
 (item.description || "")
 .replace(/<[^>]+>/g,'')
-.substring(0,300);
+.replace(/\s+/g,' ')
+.trim();
 
 document.getElementById("source").innerText =
 "Bron: " + item.sourceName;
@@ -322,11 +317,10 @@ currentIndex = 0;
 
 loadAll();
 
-setInterval(loadAll,900000);   // 15 minuten RSS refresh
-setInterval(showNews,30000);   // 30 seconden per bericht
+setInterval(loadAll,900000);
+setInterval(showNews,30000);
 
 </script>
 
 </body>
 </html>
-```
