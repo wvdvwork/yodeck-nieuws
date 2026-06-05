@@ -10,16 +10,71 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
 body{background:#061428;color:#fff;height:100vh;overflow:hidden}
-#header{height:70px;display:flex;justify-content:space-between;align-items:center;padding:0 24px;background:#0d1f3f}
+
+#header{
+height:72px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:0 24px;
+background:#0d1f3f;
+border-bottom:1px solid rgba(255,255,255,.08);
+}
+
 #title{font-size:34px;font-weight:800}
 #clock{font-size:22px}
-#dashboard{display:flex;height:calc(100vh - 70px)}
-#sidebar{width:420px;background:#102247;padding:15px;overflow:auto}
+
+#layout{
+display:flex;
+height:calc(100vh - 72px);
+}
+
+#sidebar{
+width:420px;
+background:#102247;
+padding:14px;
+overflow-y:auto;
+}
+
 #map{flex:1}
-.card{background:rgba(255,255,255,.08);border-radius:10px;padding:12px;margin-bottom:10px}
-#stats{font-size:18px;font-weight:bold}
-#powered{text-align:center;color:#8ec5ff;letter-spacing:2px;font-weight:bold}
-.incident{border-left:6px solid #ff6d00}
+
+.card{
+background:rgba(255,255,255,.08);
+border-radius:10px;
+padding:12px;
+margin-bottom:10px;
+}
+
+#stats{
+font-size:18px;
+font-weight:bold;
+}
+
+#powered{
+text-align:center;
+color:#8ec5ff;
+font-weight:bold;
+letter-spacing:2px;
+}
+
+.incident{
+border-left:6px solid #ff6d00;
+}
+
+.inc-title{
+font-weight:bold;
+margin-bottom:4px;
+}
+
+.inc-sub{
+font-size:12px;
+opacity:.85;
+}
+
+.mapboxgl-ctrl-bottom-right{
+right:10px!important;
+bottom:10px!important;
+}
 </style>
 </head>
 <body>
@@ -29,12 +84,14 @@ body{background:#061428;color:#fff;height:100vh;overflow:hidden}
   <div id="clock"></div>
 </div>
 
-<div id="dashboard">
+<div id="layout">
   <div id="sidebar">
-      <div id="stats" class="card">Laden...</div>
-      <div id="powered" class="card">POWERED BY TOMTOM</div>
-      <div id="incidentList"></div>
+    <div id="stats" class="card">Laden...</div>
+    <div id="powered" class="card">POWERED BY TOMTOM</div>
+    <div id="updated" class="card">Laatste update: --:--</div>
+    <div id="incidentList"></div>
   </div>
+
   <div id="map"></div>
 </div>
 
@@ -44,59 +101,74 @@ body{background:#061428;color:#fff;height:100vh;overflow:hidden}
 const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
 function updateClock(){
- document.getElementById("clock").innerHTML =
+ document.getElementById("clock").textContent =
  new Date().toLocaleTimeString("nl-NL");
 }
 setInterval(updateClock,1000);
 updateClock();
 
 const map = tt.map({
- key:API_KEY,
- container:"map",
- center:[5.3,52.2],
- zoom:6.6
+ key: API_KEY,
+ container: "map",
+ center: [5.2,52.1],
+ zoom: 6.6
 });
 
-map.fitBounds([[2.0,49.7],[8.8,54.5]],{padding:20});
+map.dragPan.disable();
+map.scrollZoom.disable();
+map.doubleClickZoom.disable();
 
-// Traffic Flow laag (ANWB-achtige verkeerskleuren)
-map.on("load",()=>{
- try{
-   map.addTier(tt.TrafficFlowTilesTier({
-      key:API_KEY,
-      style:"relative"
-   }));
- }catch(e){
-   console.log("Traffic Flow laag niet beschikbaar:",e);
- }
-});
+let lines=[];
+
+function clearLines(){
+ lines.forEach(id=>{
+   if(map.getLayer(id)) map.removeLayer(id);
+   if(map.getSource(id)) map.removeSource(id);
+ });
+ lines=[];
+}
+
+function colorByKm(km){
+ if(km >= 10) return "#ff0000";
+ if(km >= 5) return "#ff7a00";
+ return "#ffd400";
+}
 
 async function loadIncidents(){
+
+ clearLines();
+
+ const boxes=[
+ "3.2,50.7,5.0,52.0",
+ "5.0,50.7,7.3,52.0",
+ "3.2,52.0,5.0,53.7",
+ "5.0,52.0,7.3,53.7"
+ ];
+
+ let all=[];
+ let totalKm=0;
+
  try{
 
-   const boxes=[
-   "3.2,50.7,5.0,52.0",
-   "5.0,50.7,7.3,52.0",
-   "3.2,52.0,5.0,53.7",
-   "5.0,52.0,7.3,53.7"
-   ];
-
-   let all=[];
-   let totalKm=0;
-
    for(const bbox of boxes){
-      const res=await fetch(
-      `https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&language=nl-NL&key=${API_KEY}`
-      );
 
-      const data=await res.json();
-      if(data.incidents) all.push(...data.incidents);
+     const res = await fetch(
+      `https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&language=nl-NL&key=${API_KEY}`
+     );
+
+     const data = await res.json();
+
+     if(data.incidents){
+        all.push(...data.incidents);
+     }
    }
 
    let html="";
 
-   all.slice(0,100).forEach(i=>{
+   all.slice(0,50).forEach((i,index)=>{
+
       const p=i.properties||{};
+
       const road=(p.roadNumbers||[]).join(", ") || "Onbekende weg";
       const km=(p.length||0)/1000;
 
@@ -104,16 +176,53 @@ async function loadIncidents(){
 
       html += `
       <div class="card incident">
-        <b>${road}</b><br>
-        ${p.from||""} → ${p.to||""}<br>
-        ${km.toFixed(1)} km
+         <div class="inc-title">${road}</div>
+         <div class="inc-sub">${p.from||""} → ${p.to||""}</div>
+         <div class="inc-sub">${km.toFixed(1)} km</div>
       </div>`;
+
+      if(i.geometry && i.geometry.coordinates){
+
+         const coords =
+           i.geometry.type === "LineString"
+           ? i.geometry.coordinates
+           : [i.geometry.coordinates];
+
+         const id = "line"+index;
+
+         map.addSource(id,{
+           type:"geojson",
+           data:{
+             type:"Feature",
+             geometry:{
+               type:"LineString",
+               coordinates:coords
+             }
+           }
+         });
+
+         map.addLayer({
+           id:id,
+           type:"line",
+           source:id,
+           paint:{
+             "line-color":colorByKm(km),
+             "line-width": km >= 10 ? 10 : (km >= 5 ? 8 : 6)
+           }
+         });
+
+         lines.push(id);
+      }
    });
 
    document.getElementById("stats").innerHTML =
-      `🚨 ${all.length} incidenten<br>📏 ${totalKm.toFixed(1)} km file`;
+     `🚨 ${all.length} incidenten<br>📏 ${totalKm.toFixed(1)} km file`;
 
    document.getElementById("incidentList").innerHTML = html;
+
+   document.getElementById("updated").innerHTML =
+     "Laatste update: " +
+     new Date().toLocaleTimeString("nl-NL");
 
  }catch(err){
    console.error(err);
@@ -122,6 +231,9 @@ async function loadIncidents(){
 
 loadIncidents();
 setInterval(loadIncidents,60000);
+
+// volledige reload elke 6 uur voor signage
+setInterval(()=>location.reload(),21600000);
 </script>
 
 </body>
