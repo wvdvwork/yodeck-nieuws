@@ -1,112 +1,147 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>NL Traffic Clean</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Dashboard NL + BBOX</title>
 
-<link rel="stylesheet"
-href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
 <style>
-body{margin:0;font-family:Arial;background:#061428;color:white;overflow:hidden;}
-#wrap{display:flex;height:100vh;}
-#side{width:360px;background:#0b1b35;overflow:auto;padding:10px;}
-#map{flex:1;}
-.inc{background:rgba(255,255,255,0.06);padding:10px;margin-bottom:8px;border-left:4px solid orange;}
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #000;
+    color: white;
+  }
+
+  #layout {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  #files {
+    width: 30%;
+    background: #111;
+    padding: 15px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    border-right: 2px solid #222;
+  }
+
+  #map {
+    width: 70%;
+    height: 100%;
+  }
+
+  .file {
+    background: #1c1c1c;
+    padding: 10px;
+    margin: 8px 0;
+    border-radius: 6px;
+  }
 </style>
 </head>
 
 <body>
 
-<div id="wrap">
-<div id="side">
-<div id="stats">Laden...</div>
-<div id="list"></div>
-</div>
-<div id="map"></div>
+<div id="layout">
+  <div id="files">
+    <h2>📁 Files</h2>
+    <div id="fileList"></div>
+  </div>
+
+  <div id="map"></div>
 </div>
 
-<script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
+/* =========================
+   CONFIG
+========================= */
+const apiKey = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
-const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
-
-/* MAP */
-const map = tt.map({
-    key: API_KEY,
-    container: "map",
-    center: [5.3, 52.2],
-    zoom: 7,
-    style: "basic_main"
-});
-
-/* 🔥 BELANGRIJK: traffic zit in STYLE LAYERS */
-map.on("load", () => {
-
-    map.fitBounds([
-        [3.0, 50.6],
-        [7.4, 53.7]
-    ]);
-
-    // traffic layer via style injection
-    map.setStyle("basic_main");
-
-    load();
-    setInterval(load, 60000);
-});
-
-/* INCIDENT BBOX FIX */
-const boxes = [
-"3.0,50.6,5.0,52.0",
-"5.0,50.6,7.4,52.0",
-"3.0,52.0,5.0,53.7",
-"5.0,52.0,7.4,53.7"
+/* =========================
+   FILES (demo)
+========================= */
+const files = [
+  "rapport.pdf",
+  "planning.xlsx",
+  "routes.csv",
+  "incident.log"
 ];
 
-async function load(){
+const fileList = document.getElementById("fileList");
 
-let all = [];
-
-for(const bbox of boxes){
-
-const url =
-`https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&language=nl-NL&key=${API_KEY}`;
-
-const r = await fetch(url);
-const d = await r.json();
-
-if(Array.isArray(d.incidents)){
-all.push(...d.incidents);
-}
-
-}
-
-let html = "";
-let km = 0;
-
-all.forEach(i => {
-
-const p = i.properties || {};
-km += (p.length || 0);
-
-html += `
-<div class="inc">
-<b>${(p.roadNumbers||[]).join(", ") || "Onbekend"}</b><br>
-${p.from || ""} → ${p.to || ""}
-</div>
-`;
-
+files.forEach(f => {
+  const div = document.createElement("div");
+  div.className = "file";
+  div.textContent = "📄 " + f;
+  fileList.appendChild(div);
 });
 
-document.getElementById("stats").innerHTML =
-`🚗 ${all.length} incidenten • 📏 ${(km/1000).toFixed(1)} km`;
+/* =========================
+   MAP INIT
+========================= */
+const map = L.map('map').setView([52.1, 5.3], 7);
 
-document.getElementById("list").innerHTML = html;
+/* Base map */
+L.tileLayer(
+  `https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key=${apiKey}`,
+  { maxZoom: 18 }
+).addTo(map);
 
-}
+/* Traffic Flow (TomTom kleuren) */
+L.tileLayer(
+  `https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key=${apiKey}`,
+  { opacity: 0.7 }
+).addTo(map);
 
+/* Incidents */
+L.tileLayer(
+  `https://api.tomtom.com/traffic/map/4/tile/incidents/{z}/{x}/{y}.png?key=${apiKey}`,
+  { opacity: 0.9 }
+).addTo(map);
+
+/* =========================
+   BBOX 4 REGIO'S NEDERLAND
+========================= */
+const regions = [
+  {
+    name: "NW",
+    bbox: [[53.6, 3.2], [52.8, 5.5]],
+    color: "#00ff88"
+  },
+  {
+    name: "NE",
+    bbox: [[53.6, 5.5], [52.8, 7.3]],
+    color: "#00aaff"
+  },
+  {
+    name: "SW",
+    bbox: [[52.8, 3.2], [50.7, 5.5]],
+    color: "#ffaa00"
+  },
+  {
+    name: "SE",
+    bbox: [[52.8, 5.5], [50.7, 7.3]],
+    color: "#ff3366"
+  }
+];
+
+/* =========================
+   DRAW REGIONS
+========================= */
+regions.forEach(r => {
+  L.rectangle(r.bbox, {
+    color: r.color,
+    weight: 2,
+    fillOpacity: 0.08
+  }).addTo(map).bindPopup(`Regio: ${r.name}`);
+});
 </script>
+
 </body>
 </html>
