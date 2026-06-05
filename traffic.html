@@ -1,182 +1,122 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8">
-<title>NL Snelwegen Live Traffic</title>
+  <meta charset="utf-8" />
+  <title>NL Traffic Incidents (TomTom)</title>
 
-<script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
+  <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
 
-<style>
-body {
-    margin: 0;
-    display: flex;
-    font-family: Arial;
-}
-
-#sidebar {
-    width: 340px;
-    background: #111;
-    color: white;
-    padding: 15px;
-    height: 100vh;
-    overflow-y: auto;
-}
-
-#map {
-    flex: 1;
-    height: 100vh;
-}
-
-.item {
-    font-size: 12px;
-    padding: 6px;
-    border-bottom: 1px solid #333;
-}
-
-.small {
-    font-size: 11px;
-    color: #aaa;
-}
-</style>
+  <style>
+    body { margin: 0; font-family: Arial; }
+    #map { height: 100vh; width: 100vw; }
+    .info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 10px;
+      z-index: 999;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+  </style>
 </head>
 
 <body>
-
-<div id="sidebar">
-    <h2>🚗 NL Snelwegen</h2>
-    <div id="status">Laden...</div>
-    <h3>Files & Afsluitingen</h3>
-    <div id="list"></div>
-</div>
-
+<div class="info">NL snelweg afsluitingen (TomTom)</div>
 <div id="map"></div>
 
 <script>
-
 const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
-// 🗺 TomTom map
+// 1. Map init
 const map = tt.map({
-    key: API_KEY,
-    container: "map",
-    center: [5.3, 52.1],
-    zoom: 7
+  key: API_KEY,
+  container: "map",
+  center: [5.3, 52.1],
+  zoom: 7
 });
 
-// 📦 bbox in 3 delen (fix voor 10.000 km² limit)
-const BBOXES = [
-    "3.0%2C52.8%2C7.3%2C53.7", // noord
-    "3.0%2C51.8%2C7.3%2C52.8", // midden
-    "3.0%2C50.7%2C7.3%2C51.8"  // zuid
+// 2. Nederland opgesplitst in kleinere bbox tiles (belangrijk!)
+const tiles = [
+  [3.0, 50.7, 5.0, 51.6],
+  [5.0, 50.7, 7.2, 51.6],
+  [3.0, 51.6, 5.0, 52.6],
+  [5.0, 51.6, 7.2, 52.6],
+  [3.0, 52.6, 5.0, 53.6],
+  [5.0, 52.6, 7.2, 53.6]
 ];
 
-let objects = [];
-
-// 🚗 snelweg filter
-function isHighway(roads) {
-    if (!roads) return false;
-    return roads.some(r => /^A\d+/.test(r));
+// 3. alleen snelweg filtering
+function isHighway(roadNumbers) {
+  if (!roadNumbers) return false;
+  return roadNumbers.some(r => r.startsWith("A"));
 }
 
-// 🚧 file / afsluiting filter
-function isRelevant(events) {
-    if (!events) return false;
+// 4. incidents ophalen per tile
+async function fetchIncidents(bbox) {
+  const url = `https://api.tomtom.com/traffic/services/5/incidentDetails` +
+    `?bbox=${bbox.join(",")}` +
+    `&fields={incidents{type,geometry{type,coordinates},properties{id,iconCategory,from,to,roadNumbers,events{description}}}}` +
+    `&language=nl-NL&key=${API_KEY}`;
 
-    return events.some(e => {
-        const d = (e.description || "").toLowerCase();
-        return d.includes("file") || d.includes("afgesloten");
-    });
+  const res = await fetch(url);
+  const data = await res.json();
+  return data.incidents || [];
 }
 
-// 🧹 cleanup
-function clearMap() {
-    objects.forEach(o => o.remove());
-    objects = [];
+// 5. alles laden
+async function loadAll() {
+  const all = await Promise.all(tiles.map(fetchIncidents));
+
+  // flatten + dedupe
+  const mapData = new Map();
+
+  all.flat().forEach(i => {
+    const id = i.properties.id;
+    if (!mapData.has(id)) mapData.set(id, i);
+  });
+
+  return [...mapData.values()];
 }
 
-// 🌐 API call per bbox
-async function fetchBox(bbox) {
-    const url =
-`https://api.tomtom.com/traffic/services/5/incidentDetails
-?bbox=${bbox}
-&fields=incidents{type,geometry,properties{id,from,to,roadNumbers,events}}
-&language=nl-NL
-&key=${API_KEY}`;
+// 6. tekenen op map
+function drawIncidents(incidents) {
+  incidents.forEach(i => {
+    const props = i.properties;
 
-    const res = await fetch(url);
-    return (await res.json()).incidents || [];
-}
+    // alleen afsluitingen
+    const isClosed = props.events?.some(e => e.description === "Afgesloten");
+    if (!isClosed) return;
 
-// 🔄 main loader
-async function loadTraffic() {
-    try {
-        clearMap();
-        document.getElementById("list").innerHTML = "";
+    // alleen snelwegen
+    if (!isHighway(props.roadNumbers)) return;
 
-        let allIncidents = [];
+    const coords = i.geometry.coordinates.map(c => [c[0], c[1]]);
 
-        // 🔥 meerdere requests parallel
-        const results = await Promise.all(BBOXES.map(fetchBox));
-
-        results.forEach(r => allIncidents.push(...r));
-
-        let count = 0;
-
-        for (const i of allIncidents) {
-
-            const p = i.properties;
-
-            if (!isHighway(p.roadNumbers)) continue;
-            if (!isRelevant(p.events)) continue;
-
-            count++;
-
-            const coords = i.geometry.coordinates.map(c => [c[1], c[0]]);
-
-            const isClosed = p.events.some(e =>
-                (e.description || "").toLowerCase().includes("afgesloten")
-            );
-
-            const color = isClosed ? "red" : "orange";
-
-            // 🟠 polyline
-            const line = new tt.Polyline({
-                path: coords,
-                color: color,
-                width: 5
-            }).addTo(map);
-
-            objects.push(line);
-
-            // 📋 sidebar
-            const div = document.createElement("div");
-            div.className = "item";
-
-            div.innerHTML = `
-                <b>${p.from} → ${p.to}</b><br>
-                <span class="small">
-                    ${(p.roadNumbers || []).join(", ")}<br>
-                    ${(p.events || []).map(e => e.description).join(", ")}
-                </span>
-            `;
-
-            document.getElementById("list").appendChild(div);
+    map.addLayer({
+      id: props.id,
+      type: "line",
+      source: {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: coords
+          }
         }
-
-        document.getElementById("status").innerHTML =
-            `Laatste update: ${new Date().toLocaleTimeString()}<br>` +
-            `Actieve incidenten: ${count}`;
-
-    } catch (err) {
-        console.error(err);
-        document.getElementById("status").innerHTML =
-            "❌ Fout bij laden (check API key / traffic access)";
-    }
+      },
+      paint: {
+        "line-color": "#ff0000",
+        "line-width": 4
+      }
+    });
+  });
 }
 
-loadTraffic();
-setInterval(loadTraffic, 60000);
-
+// 7. run
+loadAll().then(drawIncidents);
 </script>
 
 </body>
