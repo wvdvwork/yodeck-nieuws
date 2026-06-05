@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 
-<title>NL Live Traffic (TomTom ANWB Style)</title>
+<title>NL TomTom Live Traffic</title>
 
 <link rel="stylesheet"
 href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
@@ -15,8 +15,8 @@ body{
 margin:0;
 font-family:Arial;
 background:#061428;
-color:white;
 overflow:hidden;
+color:white;
 }
 
 #header{
@@ -51,10 +51,11 @@ padding:10px;
 margin-bottom:8px;
 border-left:4px solid #ff9800;
 border-radius:6px;
+font-size:13px;
 }
 
 .small{
-font-size:12px;
+font-size:11px;
 opacity:.8;
 }
 
@@ -64,19 +65,16 @@ opacity:.8;
 <body>
 
 <div id="header">
-<div>🚗 NL Live Traffic (TomTom)</div>
+<div>🚗 TomTom Live Traffic NL</div>
 <div id="clock"></div>
 </div>
 
 <div id="wrap">
-
 <div id="side">
 <div id="stats">Laden...</div>
 <div id="list"></div>
 </div>
-
 <div id="map"></div>
-
 </div>
 
 <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
@@ -108,52 +106,27 @@ map.fitBounds([
 [7.4, 53.7]
 ]);
 
-/* 🔥 ECHTE TOMTOM TRAFFIC LAYERS */
-map.setTrafficFlow(true);
-map.setTrafficIncidents(true);
+/* 🔥 OFFICIËLE TOMTOM TRAFFIC TIER (DIT IS DE FIX) */
+const trafficFlow = new tt.TrafficFlowTilesTier({
+key: API_KEY,
+style: "relative"
+});
 
-loadTraffic();
-setInterval(loadTraffic, 60000);
+const trafficIncidents = new tt.TrafficIncidentTier({
+key: API_KEY,
+style: "s1"
+});
+
+map.addTier(trafficFlow);
+map.addTier(trafficIncidents);
+
+/* load incident list */
+load();
+setInterval(load, 60000);
 
 });
 
-let layers = [];
-
-/* CLEAR MAP LINES */
-function clear(){
-
-layers.forEach(l => {
-
-if(map.getLayer(l.layer)){
-map.removeLayer(l.layer);
-}
-
-if(map.getSource(l.source)){
-map.removeSource(l.source);
-}
-
-});
-
-layers = [];
-}
-
-/* COLOR (TomTom real speed impression) */
-function colorByLength(len){
-
-const km = len / 1000;
-
-if(km > 10) return "#ff2d2d";
-if(km > 3) return "#ff9800";
-return "#ffd000";
-}
-
-/* INCIDENT FETCH */
-async function loadTraffic(){
-
-try{
-
-clear();
-
+/* BBOX FIX (TomTom limit 10.000 km2) */
 const boxes = [
 "3.0,50.6,5.0,52.0",
 "5.0,50.6,7.4,52.0",
@@ -161,15 +134,14 @@ const boxes = [
 "5.0,52.0,7.4,53.7"
 ];
 
+async function load(){
+
 let all = [];
 
 for(const bbox of boxes){
 
 const url =
-`https://api.tomtom.com/traffic/services/5/incidentDetails
-?bbox=${bbox}
-&language=nl-NL
-&key=${API_KEY}`;
+`https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&language=nl-NL&key=${API_KEY}`;
 
 const res = await fetch(url);
 const data = await res.json();
@@ -184,15 +156,15 @@ all.push(...data.incidents.features);
 }
 
 let html = "";
-let total = 0;
+let km = 0;
 
-all.forEach((i, idx) => {
+all.forEach(i => {
 
 const p = i.properties || {};
-total += (p.length || 0);
+km += (p.length || 0);
 
 const road =
-(p.roadNumbers || []).join(", ") || "Onbekende weg";
+(p.roadNumbers || []).join(", ") || "Onbekend";
 
 html += `
 <div class="inc">
@@ -201,56 +173,12 @@ html += `
 </div>
 `;
 
-/* GEOMETRY */
-if(!i.geometry?.coordinates) return;
-
-let coords =
-i.geometry.type === "LineString"
-? i.geometry.coordinates
-: i.geometry.coordinates.flat();
-
-const id = "l" + idx;
-
-map.addSource(id,{
-type:"geojson",
-data:{
-type:"Feature",
-geometry:{
-type:"LineString",
-coordinates:coords
-}
-}
-});
-
-map.addLayer({
-id:id,
-type:"line",
-source:id,
-paint:{
-"line-color":colorByLength(p.length || 0),
-"line-width":5,
-"line-opacity":0.9
-}
-});
-
-layers.push({
-source:id,
-layer:id
-});
-
 });
 
 document.getElementById("stats").innerHTML =
-`🚗 ${all.length} incidenten • 📏 ${(total/1000).toFixed(1)} km file`;
+`🚗 ${all.length} incidenten • 📏 ${(km/1000).toFixed(1)} km file`;
 
 document.getElementById("list").innerHTML = html;
-
-}
-catch(err){
-console.error(err);
-document.getElementById("stats").innerHTML =
-"❌ Traffic error";
-}
 
 }
 
