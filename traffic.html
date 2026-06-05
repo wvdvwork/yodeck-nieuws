@@ -1,116 +1,93 @@
 <!DOCTYPE html>
+
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 
-<title>Verkeer Nederland ANWB stijl</title>
+<title>Verkeer Nederland Live</title>
 
 <link rel="stylesheet"
 href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
 
 <style>
 
-*{
+html,body{
 margin:0;
 padding:0;
-box-sizing:border-box;
-font-family:Arial,Helvetica,sans-serif;
-}
-
-body{
+height:100%;
 background:#061428;
-color:white;
-height:100vh;
+font-family:Arial,sans-serif;
 overflow:hidden;
 }
 
-/* HEADER */
 #header{
+height:70px;
 display:flex;
-justify-content:space-between;
 align-items:center;
-padding:16px 24px;
-background:rgba(255,255,255,0.05);
+justify-content:space-between;
+padding:0 20px;
+background:#0d1f3d;
+color:#fff;
 }
 
-#title{
-font-size:36px;
-font-weight:800;
-}
-
-#clock{
-font-size:20px;
-opacity:.8;
-}
-
-/* LAYOUT */
 #dashboard{
 display:flex;
-height:calc(100vh - 65px);
+height:calc(100vh - 70px);
 }
 
-/* LEFT */
-#left{
-width:420px;
-padding:16px;
+#sidebar{
+width:400px;
 overflow-y:auto;
-background:rgba(255,255,255,0.03);
+background:#0f2246;
+padding:15px;
+color:white;
+}
+
+#map{
+flex:1;
 }
 
 #stats{
-background:#14264f;
+background:#18356c;
 padding:12px;
 border-radius:10px;
 margin-bottom:10px;
 font-weight:bold;
 }
 
-#status{
-margin-bottom:10px;
-font-size:14px;
-opacity:.85;
-}
-
-/* INCIDENT */
 .incident{
-background:rgba(255,255,255,0.06);
+background:rgba(255,255,255,.08);
 padding:10px;
-border-radius:10px;
 margin-bottom:8px;
-border-left:6px solid orange;
+border-radius:8px;
+border-left:5px solid orange;
 }
 
-.incident-title{
-font-size:14px;
+.road{
 font-weight:bold;
+margin-bottom:4px;
 }
 
-.incident-sub{
+.small{
 font-size:12px;
 opacity:.8;
 }
 
-/* MAP */
-#map{
-flex:1;
-}
-
 </style>
-</head>
 
+</head>
 <body>
 
 <div id="header">
-<div id="title">🚗 Verkeer Nederland</div>
+<h2>🚗 Verkeer Nederland</h2>
 <div id="clock"></div>
 </div>
 
 <div id="dashboard">
 
-<div id="left">
+<div id="sidebar">
 <div id="stats">Laden...</div>
-<div id="status"></div>
 <div id="incidentList"></div>
 </div>
 
@@ -122,181 +99,102 @@ flex:1;
 
 <script>
 
-const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu"; 
+const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
-/* CLOCK */
-function clock(){
-const d = new Date();
-document.getElementById("clock").innerText =
-d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
+function updateClock(){
+document.getElementById("clock").innerHTML =
+new Date().toLocaleTimeString("nl-NL");
 }
-setInterval(clock,1000);
-clock();
 
-/* MAP */
+setInterval(updateClock,1000);
+updateClock();
+
 const map = tt.map({
 key: API_KEY,
 container: "map",
-center: [5.3,52.2],
-zoom: 7
+center:[5.3,52.2],
+zoom:7,
+
+styleVisibility:{
+trafficFlow:true,
+trafficIncidents:true
+}
 });
 
-/* vaste NL view */
-map.fitBounds([[3.0,50.6],[7.4,53.7]]);
-map.setMaxBounds([[3.0,50.6],[7.4,53.7]]);
+map.on("load",()=>{
 
-/* geen traffic overlay → rustige kaart */
+map.fitBounds([
+[3.0,50.6],
+[7.4,53.7]
+]);
 
-/* MARKERS + LINES */
-let markers = [];
-let lines = [];
+loadIncidents();
 
-/* kleur op ernst */
-function colorByLength(km){
+setInterval(loadIncidents,60000);
 
-if(km > 10) return "#ff2d2d";   // zwaar
-if(km > 3)  return "#ff9800";   // medium
-return "#ffcc00";               // licht
-}
+});
 
-/* CLEAR */
-function clearMap(){
-
-markers.forEach(m => m.remove());
-markers = [];
-
-lines.forEach(l => map.removeLayer(l));
-lines.forEach(s => map.removeSource(s));
-
-lines = [];
-}
-
-/* LOAD */
 async function loadIncidents(){
 
 try{
 
-clearMap();
-
-let all = [];
-let totalKm = 0;
-
-/* bbox splits (NL limiet fix) */
-const boxes = [
-"3.2,50.7,5.0,52.0",
-"5.0,50.7,7.3,52.0",
-"3.2,52.0,5.0,53.7",
-"5.0,52.0,7.3,53.7"
-];
-
-for(const bbox of boxes){
+const bbox = "3.0,50.6,7.4,53.7";
 
 const url =
-`https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&language=nl-NL&key=${API_KEY}`;
+`https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&fields={incidents{type,geometry{type,coordinates},properties{id,iconCategory,length,from,to,roadNumbers,events{description}}}}&language=nl-NL&key=${API_KEY}`;
 
 const res = await fetch(url);
+
 const data = await res.json();
 
-if(data.incidents){
-all.push(...data.incidents);
-}
+const incidents = data.incidents || [];
 
-}
+let totalLength = 0;
 
-/* GEEN FILES */
-if(all.length === 0){
-
-document.getElementById("stats").innerHTML =
-"🚨 0 incidenten • 📏 0 km file";
-
-document.getElementById("status").innerHTML =
-"✔ Geen files op dit moment — alle wegen vrij";
-
-document.getElementById("incidentList").innerHTML = "";
-return;
-}
-
-/* KM berekenen */
-all.forEach(i => {
-const p = i.properties || {};
-if(p.length) totalKm += p.length;
-});
-
-totalKm = totalKm / 1000;
-
-/* STATS */
-document.getElementById("stats").innerHTML =
-`🚨 ${all.length} incidenten • 📏 ${totalKm.toFixed(1)} km file`;
-
-document.getElementById("status").innerHTML = "";
-
-/* LIST + LINES */
 let html = "";
 
-all.forEach((i, idx) => {
+incidents.forEach(item=>{
 
-const p = i.properties || {};
-const road = (p.roadNumbers || []).join(", ") || "Onbekende weg";
+const p = item.properties || {};
+
+totalLength += p.length || 0;
+
+const road =
+(p.roadNumbers || []).join(", ") ||
+"Onbekende weg";
+
+const event =
+p.events?.[0]?.description || "Incident";
 
 html += `
 <div class="incident">
-<div class="incident-title">Verkeersincident</div>
-<div class="incident-sub">${road}</div>
-<div class="incident-sub">${p.from || ""} → ${p.to || ""}</div>
+<div class="road">${road}</div>
+<div>${event}</div>
+<div class="small">${p.from || ""}</div>
+<div class="small">${p.to || ""}</div>
 </div>
 `;
 
-/* LINE DRAW (ANWB STYLE) */
-if(i.geometry && i.geometry.coordinates){
-
-let coords = i.geometry.type === "LineString"
-? i.geometry.coordinates
-: [i.geometry.coordinates];
-
-const km = (p.length || 0) / 1000;
-const color = colorByLength(km);
-
-const id = "line" + idx;
-
-map.addSource(id, {
-type: "geojson",
-data: {
-type: "Feature",
-geometry: {
-type: "LineString",
-coordinates: coords
-}
-}
 });
 
-map.addLayer({
-id: id,
-type: "line",
-source: id,
-paint: {
-"line-color": color,
-"line-width": 4
-}
-});
-
-lines.push(id);
-}
-
-});
-
-document.getElementById("incidentList").innerHTML = html;
-
-}catch(err){
-console.error(err);
 document.getElementById("stats").innerHTML =
-"Fout bij laden data";
+`🚨 ${incidents.length} incidenten<br>
+📏 ${(totalLength/1000).toFixed(1)} km totaal`;
+
+document.getElementById("incidentList").innerHTML =
+html;
+
 }
+catch(err){
+
+console.error(err);
+
+document.getElementById("stats").innerHTML =
+"Fout bij laden";
 
 }
 
-/* START */
-loadIncidents();
-setInterval(loadIncidents, 60000);
+}
 
 </script>
 
