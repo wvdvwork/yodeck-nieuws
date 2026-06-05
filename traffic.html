@@ -3,60 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>NL Traffic Clean</title>
 
-<title>TomTom Live Traffic (NEW SDK)</title>
+<link rel="stylesheet"
+href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
 
 <style>
-body{
-margin:0;
-font-family:Arial;
-background:#061428;
-color:white;
-overflow:hidden;
-}
-
-#header{
-height:60px;
-display:flex;
-justify-content:space-between;
-align-items:center;
-padding:0 20px;
-background:#0e2446;
-font-weight:bold;
-}
-
-#wrap{
-display:flex;
-height:calc(100vh - 60px);
-}
-
-#side{
-width:380px;
-background:#0b1b35;
-overflow:auto;
-padding:10px;
-}
-
-#map{
-flex:1;
-}
-.inc{
-background:rgba(255,255,255,0.06);
-padding:10px;
-margin-bottom:8px;
-border-left:4px solid orange;
-border-radius:6px;
-}
-.small{font-size:12px;opacity:.8;}
+body{margin:0;font-family:Arial;background:#061428;color:white;overflow:hidden;}
+#wrap{display:flex;height:100vh;}
+#side{width:360px;background:#0b1b35;overflow:auto;padding:10px;}
+#map{flex:1;}
+.inc{background:rgba(255,255,255,0.06);padding:10px;margin-bottom:8px;border-left:4px solid orange;}
 </style>
 </head>
 
 <body>
-
-<div id="header">
-<div>🚗 TomTom NEW SDK Traffic</div>
-<div id="clock"></div>
-</div>
 
 <div id="wrap">
 <div id="side">
@@ -66,63 +27,66 @@ border-radius:6px;
 <div id="map"></div>
 </div>
 
-<script type="module">
+<script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
 
-import {
-    TomTomMap,
-    TrafficFlowModule,
-    TrafficIncidentsModule
-} from "https://esm.sh/@tomtom-org/maps-sdk";
+<script>
 
 const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
-/* CLOCK */
-function clock(){
-document.getElementById("clock").innerText =
-new Date().toLocaleTimeString("nl-NL");
-}
-setInterval(clock,1000);
-clock();
-
 /* MAP */
-const map = new TomTomMap({
+const map = tt.map({
     key: API_KEY,
     container: "map",
-    style: {
-        type: "standard",
-        id: "standardLight",
-        include: ["trafficFlow", "trafficIncidents"]
-    },
     center: [5.3, 52.2],
-    zoom: 7
+    zoom: 7,
+    style: "basic_main"
 });
 
-/* MODULES */
-const flow = await TrafficFlowModule.get(map, {
-    visible: true
+/* 🔥 BELANGRIJK: traffic zit in STYLE LAYERS */
+map.on("load", () => {
+
+    map.fitBounds([
+        [3.0, 50.6],
+        [7.4, 53.7]
+    ]);
+
+    // traffic layer via style injection
+    map.setStyle("basic_main");
+
+    load();
+    setInterval(load, 60000);
 });
 
-const incidents = await TrafficIncidentsModule.get(map, {
-    visible: true
-});
+/* INCIDENT BBOX FIX */
+const boxes = [
+"3.0,50.6,5.0,52.0",
+"5.0,50.6,7.4,52.0",
+"3.0,52.0,5.0,53.7",
+"5.0,52.0,7.4,53.7"
+];
 
-/* INCIDENT LIST (extra API voor sidebar) */
 async function load(){
 
-const bbox = "3.0,50.6,7.4,53.7";
+let all = [];
+
+for(const bbox of boxes){
 
 const url =
 `https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&language=nl-NL&key=${API_KEY}`;
 
-const res = await fetch(url);
-const data = await res.json();
+const r = await fetch(url);
+const d = await r.json();
 
-const inc = data.incidents || [];
+if(Array.isArray(d.incidents)){
+all.push(...d.incidents);
+}
+
+}
 
 let html = "";
 let km = 0;
 
-inc.forEach(i=>{
+all.forEach(i => {
 
 const p = i.properties || {};
 km += (p.length || 0);
@@ -130,23 +94,19 @@ km += (p.length || 0);
 html += `
 <div class="inc">
 <b>${(p.roadNumbers||[]).join(", ") || "Onbekend"}</b><br>
-<span class="small">${p.from || ""} → ${p.to || ""}</span>
+${p.from || ""} → ${p.to || ""}
 </div>
 `;
 
 });
 
 document.getElementById("stats").innerHTML =
-`🚗 ${inc.length} incidenten • 📏 ${(km/1000).toFixed(1)} km file`;
+`🚗 ${all.length} incidenten • 📏 ${(km/1000).toFixed(1)} km`;
 
 document.getElementById("list").innerHTML = html;
 
 }
 
-load();
-setInterval(load, 60000);
-
 </script>
-
 </body>
 </html>
