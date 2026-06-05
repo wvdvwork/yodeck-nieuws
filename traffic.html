@@ -1,269 +1,169 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta charset="UTF-8">
+<title>NL Snelwegen - TomTom Traffic</title>
 
-<title>NL Verkeer Dashboard</title>
-
-<link rel="stylesheet" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css"/>
+<!-- TomTom Maps SDK -->
+<script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
 
 <style>
-html, body {
-  margin:0;
-  padding:0;
-  height:100%;
-  width:100%;
-  overflow:hidden;
-  font-family: Arial, sans-serif;
+body {
+    margin: 0;
+    display: flex;
+    font-family: Arial;
 }
 
-#container {
-  display:flex;
-  height:100%;
-  width:100%;
-}
-
-/* LINKS */
 #sidebar {
-  width:30%;
-  background:#111;
-  color:#fff;
-  padding:15px;
-  box-sizing:border-box;
-  overflow-y:auto;
+    width: 340px;
+    background: #111;
+    color: white;
+    padding: 15px;
+    height: 100vh;
+    overflow-y: auto;
 }
 
-h1 {
-  font-size:20px;
-  margin:0 0 10px 0;
-}
-
-.section {
-  margin-top:20px;
+#map {
+    flex: 1;
+    height: 100vh;
 }
 
 .item {
-  border-bottom:1px solid #333;
-  padding:8px 0;
-  font-size:14px;
+    font-size: 12px;
+    border-bottom: 1px solid #333;
+    padding: 6px 0;
 }
-
-.badge {
-  font-size:11px;
-  padding:2px 6px;
-  border-radius:3px;
-  margin-right:6px;
-  display:inline-block;
-}
-
-.file { background:#e67e22; }
-.close { background:#e74c3c; }
-.work { background:#f1c40f; color:#000; }
 
 .small {
-  font-size:12px;
-  color:#aaa;
-}
-
-/* RECHTS */
-#map {
-  width:70%;
-  height:100%;
+    font-size: 11px;
+    color: #aaa;
 }
 </style>
 </head>
 
 <body>
 
-<div id="container">
-  <div id="sidebar">
-    <h1>NL Snelwegen verkeer</h1>
-
-    <div class="small" id="meta">Laden...</div>
-
-    <div class="section">
-      <h3>Files</h3>
-      <div id="files"></div>
-    </div>
-
-    <div class="section">
-      <h3>Afsluitingen</h3>
-      <div id="closures"></div>
-    </div>
-
-    <div class="section">
-      <h3>Werkzaamheden</h3>
-      <div id="works"></div>
-    </div>
-  </div>
-
-  <div id="map"></div>
+<div id="sidebar">
+    <h2>NL Snelwegen</h2>
+    <div id="status">Laden...</div>
+    <h3>Files & Afsluitingen</h3>
+    <div id="list"></div>
 </div>
 
-<script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
+<div id="map"></div>
 
 <script>
 
+// 🔑 API KEY
 const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
-const BBOXES = [
-  "3.0,50.7,5.2,51.8",
-  "5.2,50.7,7.4,51.8",
-  "3.0,51.8,5.2,52.8",
-  "5.2,51.8,7.4,52.8",
-  "3.0,52.8,5.2,53.8",
-  "5.2,52.8,7.4,53.8"
-];
-
-let map;
-let allIncidents = [];
-
-function isHighway(roadNumbers) {
-  if (!roadNumbers || roadNumbers.length === 0) return false;
-  return roadNumbers.some(r => r.startsWith("A"));
-}
-
-function getType(i) {
-  const cat = i.properties.iconCategory;
-  const event = i.properties.events?.[0]?.description || "";
-
-  if (cat === 8 && event.includes("Afgesloten")) return "closure";
-  if (cat === 9 || event.includes("Wegwerkzaamheden")) return "work";
-  return "file";
-}
-
-function initMap() {
-
-  map = tt.map({
+// 🗺️ TOMTOM MAP
+const map = tt.map({
     key: API_KEY,
     container: "map",
-    center: [5.3, 52.2],
-    zoom: 7,
-    dragPan: false,
-    scrollZoom: false
-  });
+    center: [5.3, 52.1],
+    zoom: 7
+});
 
-  map.on("load", () => {
-    loadAll();
-    setInterval(loadAll, 60000);
-  });
+let layerGroup = [];
+
+// 🚗 filter: alleen snelwegen
+function isHighway(roadNumbers) {
+    if (!roadNumbers) return false;
+    return roadNumbers.some(r => /^A\d+/.test(r));
 }
 
-async function loadAll() {
+// 🚧 filter: files + afsluitingen
+function isRelevant(events) {
+    if (!events) return false;
 
-  let results = [];
+    return events.some(e =>
+        e.description?.toLowerCase().includes("file") ||
+        e.description?.toLowerCase().includes("afgesloten")
+    );
+}
 
-  for (const box of BBOXES) {
-    const url =
-      `https://api.tomtom.com/traffic/services/5/incidentDetails` +
-      `?bbox=${box}` +
-      `&fields={incidents{type,geometry{type,coordinates},properties{id,iconCategory,from,to,length,delay,roadNumbers,events{description}}}}` +
-      `&language=nl-NL&key=${API_KEY}`;
+// 🔥 API call (TomTom Traffic)
+const API_URL =
+`https://api.tomtom.com/traffic/services/5/incidentDetails
+?bbox=3.0%2C50.7%2C7.3%2C53.7
+&fields=incidents{type,geometry,properties{id,from,to,roadNumbers,events}}
+&language=nl-NL
+&key=${API_KEY}`;
 
-    const res = await fetch(url);
-    const data = await res.json();
+function clearMap() {
+    layerGroup.forEach(l => l.remove());
+    layerGroup = [];
+}
 
-    if (data.incidents) {
-      results = results.concat(data.incidents);
+async function loadTraffic() {
+    try {
+        const res = await fetch(API_URL);
+        const data = await res.json();
+
+        const incidents = data.incidents || [];
+
+        clearMap();
+        document.getElementById("list").innerHTML = "";
+
+        let count = 0;
+
+        for (const i of incidents) {
+            const p = i.properties;
+
+            if (!isHighway(p.roadNumbers)) continue;
+            if (!isRelevant(p.events)) continue;
+
+            count++;
+
+            const coords = i.geometry.coordinates.map(c => [c[1], c[0]]);
+
+            const isClosed = p.events.some(e =>
+                e.description?.toLowerCase().includes("afgesloten")
+            );
+
+            const color = isClosed ? "red" : "orange";
+
+            // 🔴 TomTom polyline
+            const line = new tt.LngLatBounds();
+
+            coords.forEach(c => line.extend(c));
+
+            const polyline = new tt.Polyline({
+                path: coords,
+                color: color,
+                width: 5
+            }).addTo(map);
+
+            layerGroup.push(polyline);
+
+            // 📋 sidebar
+            const div = document.createElement("div");
+            div.className = "item";
+            div.innerHTML = `
+                <b>${p.from} → ${p.to}</b><br>
+                <span class="small">
+                    ${(p.roadNumbers || []).join(", ")}<br>
+                    ${(p.events || []).map(e => e.description).join(", ")}
+                </span>
+            `;
+
+            document.getElementById("list").appendChild(div);
+        }
+
+        document.getElementById("status").innerHTML =
+            `Laatste update: ${new Date().toLocaleTimeString()}<br>` +
+            `Incidenten: ${count}`;
+
+    } catch (err) {
+        console.error(err);
+        document.getElementById("status").innerHTML =
+            "❌ API fout (check key / traffic access)";
     }
-  }
-
-  allIncidents = results.filter(i => isHighway(i.properties.roadNumbers));
-
-  renderSidebar();
-  renderMap();
-
-  document.getElementById("meta").innerHTML =
-    "Laatste update: " + new Date().toLocaleTimeString();
 }
 
-function renderSidebar() {
-
-  const files = document.getElementById("files");
-  const closures = document.getElementById("closures");
-  const works = document.getElementById("works");
-
-  files.innerHTML = "";
-  closures.innerHTML = "";
-  works.innerHTML = "";
-
-  let totalDelay = 0;
-
-  allIncidents.forEach(i => {
-
-    const p = i.properties;
-    const type = getType(i);
-
-    const road = (p.roadNumbers?.length)
-      ? p.roadNumbers.join(", ")
-      : "Onbekend";
-
-    const title = `${road} ${p.from ? p.from + " → " + p.to : ""}`;
-    const len = (p.length / 1000).toFixed(1);
-
-    if (p.delay) totalDelay += p.delay;
-
-    const div = document.createElement("div");
-    div.className = "item";
-
-    if (type === "closure") {
-
-      div.innerHTML = `
-        <span class="badge close">AFSLUITING</span>
-        <b>${title}</b><br>
-        ${len} km
-      `;
-      closures.appendChild(div);
-
-    } else if (type === "work") {
-
-      div.innerHTML = `
-        <span class="badge work">WERKZAAMHEDEN</span>
-        <b>${title}</b><br>
-        ${len} km ${p.delay ? " | +" + Math.round(p.delay/60) + " min" : ""}
-      `;
-      works.appendChild(div);
-
-    } else {
-
-      div.innerHTML = `
-        <span class="badge file">FILE</span>
-        <b>${title}</b><br>
-        ${len} km
-      `;
-      files.appendChild(div);
-    }
-  });
-
-  document.getElementById("meta").innerHTML =
-    `Incidenten: ${allIncidents.length} | Totale vertraging: ~${Math.round(totalDelay/60)} min`;
-}
-
-function renderMap() {
-
-  document.querySelectorAll(".tt-polyline").forEach(e => e.remove());
-
-  allIncidents.forEach(i => {
-
-    const type = getType(i);
-    const coords = i.geometry.coordinates;
-
-    let color = "#ff9900";
-
-    if (type === "closure") color = "#ff0000";
-    if (type === "work") color = "#ffcc00";
-
-    new tt.Polyline({
-      map: map,
-      coordinates: coords,
-      color: color,
-      width: 5
-    });
-  });
-}
-
-initMap();
+loadTraffic();
+setInterval(loadTraffic, 60000);
 
 </script>
 
