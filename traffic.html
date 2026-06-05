@@ -1,239 +1,243 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Verkeer Nederland Pro</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Verkeer Nederland</title>
 
 <link rel="stylesheet" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
 
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
-body{background:#061428;color:#fff;height:100vh;overflow:hidden}
-
-#header{
-height:72px;
-display:flex;
-justify-content:space-between;
-align-items:center;
-padding:0 24px;
-background:#0d1f3f;
-border-bottom:1px solid rgba(255,255,255,.08);
+html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    font-family:Arial,sans-serif;
+    background:#111;
 }
 
-#title{font-size:34px;font-weight:800}
-#clock{font-size:22px}
-
-#layout{
-display:flex;
-height:calc(100vh - 72px);
+#container{
+    display:flex;
+    width:100%;
+    height:100%;
 }
 
 #sidebar{
-width:420px;
-background:#102247;
-padding:14px;
-overflow-y:auto;
+    width:380px;
+    background:#1b1b1b;
+    color:white;
+    padding:20px;
+    box-sizing:border-box;
+    overflow-y:auto;
 }
 
-#map{flex:1}
-
-.card{
-background:rgba(255,255,255,.08);
-border-radius:10px;
-padding:12px;
-margin-bottom:10px;
+#map{
+    flex:1;
 }
 
-#stats{
-font-size:18px;
-font-weight:bold;
+.stat{
+    font-size:34px;
+    font-weight:bold;
+    margin-bottom:20px;
 }
 
-#powered{
-text-align:center;
-color:#8ec5ff;
-font-weight:bold;
-letter-spacing:2px;
+.label{
+    font-size:14px;
+    color:#aaa;
 }
 
 .incident{
-border-left:6px solid #ff6d00;
+    padding:10px;
+    margin-bottom:10px;
+    border-left:4px solid #ff9800;
+    background:#2a2a2a;
 }
 
-.inc-title{
-font-weight:bold;
-margin-bottom:4px;
+.incident h4{
+    margin:0 0 5px 0;
+    font-size:15px;
 }
 
-.inc-sub{
-font-size:12px;
-opacity:.85;
+.incident p{
+    margin:0;
+    color:#ddd;
+    font-size:13px;
 }
 
-.mapboxgl-ctrl-bottom-right{
-right:10px!important;
-bottom:10px!important;
+.footer{
+    margin-top:20px;
+    font-size:12px;
+    color:#888;
 }
 </style>
 </head>
+
 <body>
 
-<div id="header">
-  <div id="title">Verkeer Nederland</div>
-  <div id="clock"></div>
-</div>
+<div id="container">
 
-<div id="layout">
-  <div id="sidebar">
-    <div id="stats" class="card">Laden...</div>
-    <div id="powered" class="card">POWERED BY TOMTOM</div>
-    <div id="updated" class="card">Laatste update: --:--</div>
-    <div id="incidentList"></div>
-  </div>
+    <div id="sidebar">
 
-  <div id="map"></div>
+        <h1>🇳🇱 Verkeer Nederland</h1>
+
+        <div class="label">Actieve incidenten</div>
+        <div id="incidentCount" class="stat">-</div>
+
+        <div class="label">Totale filelengte</div>
+        <div id="jamLength" class="stat">- km</div>
+
+        <div class="label">Laatste update</div>
+        <div id="lastUpdate">-</div>
+
+        <hr>
+
+        <div id="incidentList"></div>
+
+        <div class="footer">
+            Powered by TOMTOM
+        </div>
+
+    </div>
+
+    <div id="map"></div>
+
 </div>
 
 <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
 
 <script>
+
 const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
-function updateClock(){
- document.getElementById("clock").textContent =
- new Date().toLocaleTimeString("nl-NL");
-}
-setInterval(updateClock,1000);
-updateClock();
+const BBOXES = [
+    "3.2,50.7,4.5,51.6",
+    "4.5,50.7,5.8,51.6",
+    "5.8,50.7,7.3,51.6",
+
+    "3.2,51.6,4.5,52.6",
+    "4.5,51.6,5.8,52.6",
+    "5.8,51.6,7.3,52.6",
+
+    "3.2,52.6,5.0,53.8",
+    "5.0,52.6,7.3,53.8"
+];
 
 const map = tt.map({
- key: API_KEY,
- container: "map",
- center: [5.2,52.1],
- zoom: 6.6
+    key: API_KEY,
+    container: "map",
+    center: [5.3,52.2],
+    zoom: 7,
+    style: "https://api.tomtom.com/style/2/custom/style/dG9tdG9tQEBAZDY4YjJlMzgtY2U3NS00NzY4LWFjY2EtOWY5YzY5MjIxNmUw/draft?sdkVersion=6.x&key=" + API_KEY
 });
 
-map.dragPan.disable();
-map.scrollZoom.disable();
-map.doubleClickZoom.disable();
+map.addControl(new tt.NavigationControl());
 
-let lines=[];
-
-function clearLines(){
- lines.forEach(id=>{
-   if(map.getLayer(id)) map.removeLayer(id);
-   if(map.getSource(id)) map.removeSource(id);
- });
- lines=[];
-}
-
-function colorByKm(km){
- if(km >= 10) return "#ff0000";
- if(km >= 5) return "#ff7a00";
- return "#ffd400";
-}
+let markers=[];
 
 async function loadIncidents(){
 
- clearLines();
+    markers.forEach(m=>m.remove());
+    markers=[];
 
- const boxes=[
- "3.2,50.7,5.0,52.0",
- "5.0,50.7,7.3,52.0",
- "3.2,52.0,5.0,53.7",
- "5.0,52.0,7.3,53.7"
- ];
+    let incidents=[];
 
- let all=[];
- let totalKm=0;
+    for(const bbox of BBOXES){
 
- try{
+        try{
 
-   for(const bbox of boxes){
+            const url=
+            `https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&language=nl-NL&key=${API_KEY}`;
 
-     const res = await fetch(
-      `https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&language=nl-NL&key=${API_KEY}`
-     );
+            const response=await fetch(url);
 
-     const data = await res.json();
+            if(!response.ok){
+                console.error(bbox,response.status);
+                continue;
+            }
 
-     if(data.incidents){
-        all.push(...data.incidents);
-     }
-   }
+            const data=await response.json();
 
-   let html="";
+            if(data.tm && data.tm.poi){
+                incidents.push(...data.tm.poi);
+            }
 
-   all.slice(0,50).forEach((i,index)=>{
+        }catch(e){
+            console.error(e);
+        }
+    }
 
-      const p=i.properties||{};
+    document.getElementById("incidentCount").innerText=
+        incidents.length;
 
-      const road=(p.roadNumbers||[]).join(", ") || "Onbekende weg";
-      const km=(p.length||0)/1000;
+    let totalLength=0;
 
-      totalKm += km;
+    incidents.forEach(i=>{
 
-      html += `
-      <div class="card incident">
-         <div class="inc-title">${road}</div>
-         <div class="inc-sub">${p.from||""} → ${p.to||""}</div>
-         <div class="inc-sub">${km.toFixed(1)} km</div>
-      </div>`;
+        if(i.d && i.d.v && i.d.v.l){
+            totalLength+=i.d.v.l;
+        }
 
-      if(i.geometry && i.geometry.coordinates){
+        if(i.p && i.p.x && i.p.y){
 
-         const coords =
-           i.geometry.type === "LineString"
-           ? i.geometry.coordinates
-           : [i.geometry.coordinates];
+            const marker=new tt.Marker({
+                color:"#ff3b30"
+            })
+            .setLngLat([i.p.x,i.p.y])
+            .addTo(map);
 
-         const id = "line"+index;
+            markers.push(marker);
+        }
 
-         map.addSource(id,{
-           type:"geojson",
-           data:{
-             type:"Feature",
-             geometry:{
-               type:"LineString",
-               coordinates:coords
-             }
-           }
-         });
+    });
 
-         map.addLayer({
-           id:id,
-           type:"line",
-           source:id,
-           paint:{
-             "line-color":colorByKm(km),
-             "line-width": km >= 10 ? 10 : (km >= 5 ? 8 : 6)
-           }
-         });
+    document.getElementById("jamLength").innerText=
+        (totalLength/1000).toFixed(1)+" km";
 
-         lines.push(id);
-      }
-   });
+    document.getElementById("lastUpdate").innerText=
+        new Date().toLocaleTimeString("nl-NL");
 
-   document.getElementById("stats").innerHTML =
-     `🚨 ${all.length} incidenten<br>📏 ${totalKm.toFixed(1)} km file`;
+    renderIncidentList(incidents);
+}
 
-   document.getElementById("incidentList").innerHTML = html;
+function renderIncidentList(incidents){
 
-   document.getElementById("updated").innerHTML =
-     "Laatste update: " +
-     new Date().toLocaleTimeString("nl-NL");
+    const list=document.getElementById("incidentList");
 
- }catch(err){
-   console.error(err);
- }
+    list.innerHTML="";
+
+    incidents.slice(0,25).forEach(i=>{
+
+        const div=document.createElement("div");
+        div.className="incident";
+
+        const title=
+            i.ic ||
+            "Verkeersincident";
+
+        const delay=
+            i.d && i.d.v && i.d.v.l
+            ? (i.d.v.l/1000).toFixed(1)+" km"
+            : "";
+
+        div.innerHTML=`
+            <h4>${title}</h4>
+            <p>${delay}</p>
+        `;
+
+        list.appendChild(div);
+    });
 }
 
 loadIncidents();
+
 setInterval(loadIncidents,60000);
 
-// volledige reload elke 6 uur voor signage
-setInterval(()=>location.reload(),21600000);
+setTimeout(()=>{
+    location.reload();
+},21600000);
+
 </script>
 
 </body>
