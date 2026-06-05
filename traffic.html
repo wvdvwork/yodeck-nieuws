@@ -18,7 +18,6 @@ padding:16px 24px;background:rgba(255,255,255,.05);
 
 #title{
 font-size:36px;font-weight:800;color:#fff;
-text-shadow:0 0 10px rgba(255,255,255,.15);
 }
 
 #clock{font-size:20px;opacity:.8;}
@@ -112,27 +111,16 @@ map.once("idle",()=>{
 map.zoomTo(map.getZoom()-0.6);
 });
 
-let markers=[];
 let lines=[];
 
 function colorByLength(km){
-if(km>10) return "#ff2d2d";
-if(km>3) return "#ff9800";
-return "#ffcc00";
-}
-
-function isRoadClosed(props){
-const txt=JSON.stringify(props).toLowerCase();
-return txt.includes("closure") ||
-txt.includes("closed") ||
-txt.includes("road closed") ||
-txt.includes("afgesloten");
+if(km > 10) return "#d50000";
+if(km > 5) return "#ff6d00";
+if(km > 2) return "#ffb300";
+return "#ffd600";
 }
 
 function clearMap(){
-markers.forEach(m=>m.remove());
-markers=[];
-
 lines.forEach(id=>{
 if(map.getLayer(id)) map.removeLayer(id);
 if(map.getSource(id)) map.removeSource(id);
@@ -156,22 +144,12 @@ const boxes=[
 ];
 
 for(const bbox of boxes){
-
 const url=`https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&language=nl-NL&key=${API_KEY}`;
-
 const res=await fetch(url);
 const data=await res.json();
-
 if(data.incidents){
 all.push(...data.incidents);
 }
-}
-
-if(all.length===0){
-document.getElementById("stats").innerHTML="🚨 0 incidenten • 📏 0 km file";
-document.getElementById("status").innerHTML="✔ Geen files op dit moment — alle wegen vrij";
-document.getElementById("incidentList").innerHTML="";
-return;
 }
 
 all.forEach(i=>{
@@ -181,8 +159,13 @@ if(p.length) totalKm+=p.length;
 
 totalKm/=1000;
 
-document.getElementById("stats").innerHTML=
+document.getElementById("stats").innerHTML =
 `🚨 ${all.length} incidenten • 📏 ${totalKm.toFixed(1)} km file`;
+
+document.getElementById("status").innerHTML =
+all.length
+? "Live verkeersinformatie uit TomTom Traffic Incidents"
+: "✔ Geen files of incidenten gevonden";
 
 let html="";
 
@@ -192,30 +175,25 @@ const p=i.properties||{};
 const road=(p.roadNumbers||[]).join(", ") || "Onbekende weg";
 const km=(p.length||0)/1000;
 
-const closed=isRoadClosed(p);
-
 html += `
-<div class="incident" style="border-left:6px solid ${closed ? '#000000' : colorByLength(km)}">
-<div class="incident-title">${closed ? '⛔ Weg afgesloten' : '🚗 Verkeersincident'}</div>
+<div class="incident" style="border-left:6px solid ${colorByLength(km)}">
+<div class="incident-title">🚗 Verkeersincident</div>
 <div class="incident-sub">${road}</div>
 <div class="incident-sub">${p.from || ""} → ${p.to || ""}</div>
 </div>`;
 
 if(i.geometry && i.geometry.coordinates){
 
-let coords=i.geometry.type==="LineString"
+const coords =
+i.geometry.type==="LineString"
 ? i.geometry.coordinates
 : [i.geometry.coordinates];
 
-let color,width;
+const color=colorByLength(km);
 
-if(closed){
-color="#000000";
-width=8;
-}else{
-color=colorByLength(km);
-width=5;
-}
+let width=6;
+if(km>10) width=8;
+else if(km>5) width=7;
 
 const id="line"+idx;
 
