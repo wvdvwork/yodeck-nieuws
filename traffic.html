@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 
-<title>TomTom Live Traffic NL</title>
+<title>NL Live Traffic (TomTom ANWB Style)</title>
 
 <link rel="stylesheet"
 href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
@@ -15,8 +15,8 @@ body{
 margin:0;
 font-family:Arial;
 background:#061428;
-overflow:hidden;
 color:white;
+overflow:hidden;
 }
 
 #header{
@@ -25,7 +25,7 @@ display:flex;
 justify-content:space-between;
 align-items:center;
 padding:0 20px;
-background:#0e2446;
+background:#0e2246;
 font-weight:bold;
 }
 
@@ -53,22 +53,30 @@ border-left:4px solid #ff9800;
 border-radius:6px;
 }
 
+.small{
+font-size:12px;
+opacity:.8;
+}
+
 </style>
 </head>
 
 <body>
 
 <div id="header">
-<div>🚗 TomTom Live Traffic</div>
+<div>🚗 NL Live Traffic (TomTom)</div>
 <div id="clock"></div>
 </div>
 
 <div id="wrap">
+
 <div id="side">
 <div id="stats">Laden...</div>
 <div id="list"></div>
 </div>
+
 <div id="map"></div>
+
 </div>
 
 <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
@@ -77,6 +85,7 @@ border-radius:6px;
 
 const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
+/* CLOCK */
 function clock(){
 document.getElementById("clock").innerText =
 new Date().toLocaleTimeString("nl-NL");
@@ -88,29 +97,73 @@ clock();
 const map = tt.map({
 key: API_KEY,
 container: "map",
-center: [5.3,52.2],
+center: [5.3, 52.2],
 zoom: 7
 });
 
 map.on("load", () => {
 
 map.fitBounds([
-[3.0,50.6],
-[7.4,53.7]
+[3.0, 50.6],
+[7.4, 53.7]
 ]);
 
-/* 🔥 DIT IS DE ECHTE TOMTOM TRAFFIC ENGINE */
+/* 🔥 ECHTE TOMTOM TRAFFIC LAYERS */
 map.setTrafficFlow(true);
 map.setTrafficIncidents(true);
 
-loadIncidents();
-setInterval(loadIncidents, 60000);
+loadTraffic();
+setInterval(loadTraffic, 60000);
 
 });
 
-async function loadIncidents(){
+let layers = [];
 
-const bbox = "3.0,50.6,7.4,53.7";
+/* CLEAR MAP LINES */
+function clear(){
+
+layers.forEach(l => {
+
+if(map.getLayer(l.layer)){
+map.removeLayer(l.layer);
+}
+
+if(map.getSource(l.source)){
+map.removeSource(l.source);
+}
+
+});
+
+layers = [];
+}
+
+/* COLOR (TomTom real speed impression) */
+function colorByLength(len){
+
+const km = len / 1000;
+
+if(km > 10) return "#ff2d2d";
+if(km > 3) return "#ff9800";
+return "#ffd000";
+}
+
+/* INCIDENT FETCH */
+async function loadTraffic(){
+
+try{
+
+clear();
+
+const boxes = [
+"3.0,50.6,5.0,52.0",
+"5.0,50.6,7.4,52.0",
+"3.0,52.0,5.0,53.7",
+"5.0,52.0,7.4,53.7"
+];
+
+let all = [];
+
+for(const bbox of boxes){
 
 const url =
 `https://api.tomtom.com/traffic/services/5/incidentDetails
@@ -121,30 +174,83 @@ const url =
 const res = await fetch(url);
 const data = await res.json();
 
-const inc = data.incidents || [];
+if(Array.isArray(data.incidents)){
+all.push(...data.incidents);
+}
+else if(data.incidents?.features){
+all.push(...data.incidents.features);
+}
+
+}
 
 let html = "";
+let total = 0;
 
-document.getElementById("stats").innerHTML =
-`🚗 ${inc.length} incidenten live`;
-
-inc.forEach(i=>{
+all.forEach((i, idx) => {
 
 const p = i.properties || {};
+total += (p.length || 0);
 
 const road =
-(p.roadNumbers||[]).join(", ") || "Onbekende weg";
+(p.roadNumbers || []).join(", ") || "Onbekende weg";
 
 html += `
 <div class="inc">
 <b>${road}</b><br>
-${p.from||""} → ${p.to||""}
+<span class="small">${p.from || ""} → ${p.to || ""}</span>
 </div>
 `;
 
+/* GEOMETRY */
+if(!i.geometry?.coordinates) return;
+
+let coords =
+i.geometry.type === "LineString"
+? i.geometry.coordinates
+: i.geometry.coordinates.flat();
+
+const id = "l" + idx;
+
+map.addSource(id,{
+type:"geojson",
+data:{
+type:"Feature",
+geometry:{
+type:"LineString",
+coordinates:coords
+}
+}
 });
 
+map.addLayer({
+id:id,
+type:"line",
+source:id,
+paint:{
+"line-color":colorByLength(p.length || 0),
+"line-width":5,
+"line-opacity":0.9
+}
+});
+
+layers.push({
+source:id,
+layer:id
+});
+
+});
+
+document.getElementById("stats").innerHTML =
+`🚗 ${all.length} incidenten • 📏 ${(total/1000).toFixed(1)} km file`;
+
 document.getElementById("list").innerHTML = html;
+
+}
+catch(err){
+console.error(err);
+document.getElementById("stats").innerHTML =
+"❌ Traffic error";
+}
 
 }
 
