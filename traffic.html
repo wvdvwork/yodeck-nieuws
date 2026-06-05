@@ -3,231 +3,79 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Verkeer Nederland</title>
+<title>Verkeer Nederland Flow + Incidenten</title>
 
 <link rel="stylesheet" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
 
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;}
-body{background:#061428;color:white;height:100vh;overflow:hidden;}
-
-#header{
-display:flex;justify-content:space-between;align-items:center;
-padding:16px 24px;background:rgba(255,255,255,.05);
-}
-
-#title{
-font-size:36px;font-weight:800;color:#fff;
-}
-
-#clock{font-size:20px;opacity:.8;}
-
-#dashboard{display:flex;height:calc(100vh - 65px);}
-
-#left{
-width:420px;padding:16px;overflow-y:auto;
-background:rgba(255,255,255,.03);
-}
-
-#stats{
-background:#14264f;padding:12px;border-radius:10px;
-margin-bottom:10px;font-weight:bold;
-}
-
-#powered{
-margin:12px 0 18px 0;
-padding:12px;
-text-align:center;
-background:rgba(255,255,255,.05);
-border-radius:10px;
-font-size:13px;
-font-weight:700;
-letter-spacing:1px;
-text-transform:uppercase;
-color:#8ec5ff;
-}
-
-#status{margin-bottom:10px;font-size:14px;opacity:.85;}
-
-.incident{
-background:rgba(255,255,255,.06);
-padding:10px;border-radius:10px;
-margin-bottom:8px;
-}
-
-.incident-title{font-size:14px;font-weight:bold;}
-.incident-sub{font-size:12px;opacity:.8;}
-
-#map{flex:1;}
-
-.mapboxgl-ctrl-bottom-right{
-right:10px !important;
-bottom:10px !important;
-}
+html,body{margin:0;height:100%;font-family:Arial,sans-serif;background:#061428;color:white}
+#header{padding:14px 20px;background:#0d1f3f;font-size:28px;font-weight:bold}
+#wrap{display:flex;height:calc(100% - 58px)}
+#sidebar{width:380px;background:#102247;padding:12px;overflow:auto}
+#map{flex:1}
+.card{background:rgba(255,255,255,.08);padding:10px;border-radius:8px;margin-bottom:8px}
 </style>
 </head>
 <body>
-
-<div id="header">
-<div id="title">Verkeer Nederland</div>
-<div id="clock"></div>
-</div>
-
-<div id="dashboard">
-<div id="left">
-<div id="stats">Laden...</div>
-<div id="powered">Powered by TOMTOM</div>
-<div id="status"></div>
-<div id="incidentList"></div>
-</div>
-<div id="map"></div>
+<div id="header">Verkeer Nederland – Traffic Flow + Incidenten</div>
+<div id="wrap">
+  <div id="sidebar">
+    <div class="card">Powered by TOMTOM</div>
+    <div id="incidents"></div>
+  </div>
+  <div id="map"></div>
 </div>
 
 <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
-
 <script>
 const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
-function clock(){
-const d=new Date();
-document.getElementById("clock").innerText =
-d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
-}
-setInterval(clock,1000);
-clock();
-
 const map = tt.map({
-key:API_KEY,
-container:"map",
-center:[5.3,52.2],
-zoom:7
+  key: API_KEY,
+  container: "map",
+  center: [5.3,52.2],
+  zoom: 6.6
 });
 
-const nlBounds=[[2.2,49.9],[8.6,54.3]];
-map.fitBounds(nlBounds,{padding:20});
-map.setMaxBounds(nlBounds);
+// Nederland iets verder uitgezoomd
+map.fitBounds([[2.0,49.7],[8.8,54.5]], {padding:20});
 
-map.once("idle",()=>{
-map.zoomTo(map.getZoom()-0.6);
+// Traffic Flow laag
+map.on("load", () => {
+  map.addTier(tt.TrafficFlowTilesTier({
+    key: API_KEY,
+    style: "relative"
+  }));
 });
-
-let lines=[];
-
-function colorByLength(km){
-if(km > 10) return "#d50000";
-if(km > 5) return "#ff6d00";
-if(km > 2) return "#ffb300";
-return "#ffd600";
-}
-
-function clearMap(){
-lines.forEach(id=>{
-if(map.getLayer(id)) map.removeLayer(id);
-if(map.getSource(id)) map.removeSource(id);
-});
-lines=[];
-}
 
 async function loadIncidents(){
-try{
+  const box = "2.8,50.6,7.5,53.7";
 
-clearMap();
+  try{
+    const res = await fetch(
+      `https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${box}&language=nl-NL&key=${API_KEY}`
+    );
 
-let all=[];
-let totalKm=0;
+    const data = await res.json();
 
-const boxes=[
-"3.2,50.7,5.0,52.0",
-"5.0,50.7,7.3,52.0",
-"3.2,52.0,5.0,53.7",
-"5.0,52.0,7.3,53.7"
-];
+    let html = "";
 
-for(const bbox of boxes){
-const url=`https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&language=nl-NL&key=${API_KEY}`;
-const res=await fetch(url);
-const data=await res.json();
-if(data.incidents){
-all.push(...data.incidents);
-}
-}
+    (data.incidents || []).slice(0,50).forEach(i=>{
+      const p = i.properties || {};
+      const road = (p.roadNumbers || []).join(", ") || "Onbekende weg";
 
-all.forEach(i=>{
-const p=i.properties||{};
-if(p.length) totalKm+=p.length;
-});
+      html += `
+      <div class="card">
+        <b>${road}</b><br>
+        ${p.from || ""} → ${p.to || ""}
+      </div>`;
+    });
 
-totalKm/=1000;
+    document.getElementById("incidents").innerHTML = html;
 
-document.getElementById("stats").innerHTML =
-`🚨 ${all.length} incidenten • 📏 ${totalKm.toFixed(1)} km file`;
-
-document.getElementById("status").innerHTML =
-all.length
-? "Live verkeersinformatie uit TomTom Traffic Incidents"
-: "✔ Geen files of incidenten gevonden";
-
-let html="";
-
-all.forEach((i,idx)=>{
-
-const p=i.properties||{};
-const road=(p.roadNumbers||[]).join(", ") || "Onbekende weg";
-const km=(p.length||0)/1000;
-
-html += `
-<div class="incident" style="border-left:6px solid ${colorByLength(km)}">
-<div class="incident-title">🚗 Verkeersincident</div>
-<div class="incident-sub">${road}</div>
-<div class="incident-sub">${p.from || ""} → ${p.to || ""}</div>
-</div>`;
-
-if(i.geometry && i.geometry.coordinates){
-
-const coords =
-i.geometry.type==="LineString"
-? i.geometry.coordinates
-: [i.geometry.coordinates];
-
-const color=colorByLength(km);
-
-let width=6;
-if(km>10) width=8;
-else if(km>5) width=7;
-
-const id="line"+idx;
-
-map.addSource(id,{
-type:"geojson",
-data:{
-type:"Feature",
-geometry:{
-type:"LineString",
-coordinates:coords
-}
-}
-});
-
-map.addLayer({
-id:id,
-type:"line",
-source:id,
-paint:{
-"line-color":color,
-"line-width":width
-}
-});
-
-lines.push(id);
-}
-});
-
-document.getElementById("incidentList").innerHTML=html;
-
-}catch(err){
-console.error(err);
-document.getElementById("stats").innerHTML="Fout bij laden data";
-}
+  }catch(e){
+    console.error(e);
+  }
 }
 
 loadIncidents();
