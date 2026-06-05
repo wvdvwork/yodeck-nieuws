@@ -2,108 +2,110 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Verkeer Nederland</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>Verkeer Nederland Live</title>
+
+<link rel="stylesheet"
+href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
 
 <style>
 
-body{
+*{
 margin:0;
+padding:0;
+box-sizing:border-box;
 font-family:Arial,Helvetica,sans-serif;
-background:radial-gradient(circle at top,#0a0f2c,#020051);
+}
+
+body{
+background:#081030;
 color:white;
+height:100vh;
 overflow:hidden;
 }
 
-/* HEADER */
 #header{
+height:90px;
 display:flex;
 justify-content:space-between;
 align-items:center;
-padding:35px 45px 10px 45px;
+padding:20px 30px;
+background:rgba(255,255,255,.05);
+backdrop-filter:blur(10px);
 }
 
 #title{
-font-size:54px;
+font-size:42px;
 font-weight:800;
-letter-spacing:1px;
 }
 
 #clock{
-font-size:32px;
-opacity:0.8;
+font-size:28px;
 }
 
-/* SUB */
-#sub{
-padding:0 45px;
-opacity:0.7;
-font-size:18px;
+#dashboard{
+display:flex;
+height:calc(100vh - 90px);
+}
+
+#left{
+width:420px;
+background:rgba(255,255,255,.04);
+overflow-y:auto;
+padding:20px;
+}
+
+#stats{
+background:#13204f;
+padding:15px;
+border-radius:12px;
 margin-bottom:20px;
-}
-
-/* LIST */
-#list{
-padding:0 45px;
-display:flex;
-flex-direction:column;
-gap:14px;
-}
-
-/* CARD */
-.row{
-display:flex;
-justify-content:space-between;
-align-items:center;
-
-padding:20px 22px;
-border-radius:14px;
-
-background:rgba(255,255,255,0.08);
-backdrop-filter:blur(10px);
-border:1px solid rgba(255,255,255,0.08);
-
-font-size:26px;
-
-transition:0.3s;
-}
-
-.row:hover{
-transform:scale(1.01);
-background:rgba(255,255,255,0.12);
-}
-
-/* LEFT */
-.left{
-display:flex;
-align-items:center;
-gap:12px;
-}
-
-/* BADGES */
-.badge{
-padding:6px 14px;
-border-radius:999px;
-font-size:18px;
+font-size:20px;
 font-weight:bold;
 }
 
-.good{ background:#1db954; }
-.mid{ background:#ffb300; }
-.bad{ background:#ff4d4d; }
+.incident{
+padding:14px;
+margin-bottom:12px;
+border-radius:12px;
+background:rgba(255,255,255,.08);
+border-left:6px solid #ff9800;
+}
 
-/* FOOTER */
-#footer{
-position:absolute;
-bottom:15px;
-left:45px;
-opacity:0.6;
+.incident-title{
 font-size:16px;
+font-weight:bold;
+margin-bottom:5px;
+}
+
+.incident-road{
+font-size:14px;
+opacity:.8;
+}
+
+.accident{
+border-left-color:#ff4444;
+}
+
+.jam{
+border-left-color:#ff9800;
+}
+
+.closed{
+border-left-color:#9c27b0;
+}
+
+.roadworks{
+border-left-color:#00bcd4;
+}
+
+#map{
+flex:1;
 }
 
 </style>
 </head>
-
 <body>
 
 <div id="header">
@@ -111,93 +113,266 @@ font-size:16px;
 <div id="clock"></div>
 </div>
 
-<div id="sub">Live verkeerssituatie • automatisch bijgewerkt</div>
+<div id="dashboard">
 
-<div id="list"></div>
+<div id="left">
 
-<div id="footer">Powered by TomTom Traffic API</div>
+<div id="stats">
+Incidenten laden...
+</div>
+
+<div id="incidentList">
+</div>
+
+</div>
+
+<div id="map"></div>
+
+</div>
+
+<script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
 
 <script>
 
 const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
-/* klok */
-function clock(){
-const d = new Date();
-document.getElementById("clock").innerText =
-d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+let markers = [];
+
+function updateClock(){
+
+const now = new Date();
+
+document.getElementById("clock").innerHTML =
+now.toLocaleTimeString("nl-NL",{
+hour:'2-digit',
+minute:'2-digit'
+});
+
 }
-setInterval(clock,1000);
-clock();
 
-/* vaste punten */
-const points = [
-{ name:"A1 Amsterdam → Amersfoort", lat:52.37, lon:4.90 },
-{ name:"A2 Amsterdam → Utrecht", lat:52.10, lon:5.12 },
-{ name:"A12 Den Haag → Utrecht", lat:52.08, lon:4.31 },
-{ name:"A27 Breda → Utrecht", lat:51.85, lon:4.80 },
-{ name:"A50 Arnhem → Eindhoven", lat:51.98, lon:5.91 }
-];
+setInterval(updateClock,1000);
+updateClock();
 
-async function load(){
+const map = tt.map({
+key:API_KEY,
+container:"map",
+center:[5.4,52.2],
+zoom:7
+});
 
-let html = "";
+map.addControl(new tt.NavigationControl());
 
-for(let p of points){
+map.on("load",()=>{
 
 try{
 
-const url =
-`https://api.tomtom.com/traffic/services/4/flowSegmentData/relative0/10/json?point=${p.lat},${p.lon}&key=${API_KEY}`;
-
-const res = await fetch(url);
-const data = await res.json();
-
-const cur = data.flowSegmentData.currentSpeed;
-const free = data.flowSegmentData.freeFlowSpeed;
-
-let ratio = cur/free;
-
-let cls = "good";
-let label = "VRIJ";
-
-if(ratio < 0.6){ cls="bad"; label="FILE"; }
-else if(ratio < 0.85){ cls="mid"; label="DRUK"; }
-
-html += `
-<div class="row">
-
-<div class="left">
-<span>🛣️</span>
-<span>${p.name}</span>
-</div>
-
-<div class="badge ${cls}">
-${label} • ${cur} km/h
-</div>
-
-</div>
-`;
+map.addTier(
+new tt.TrafficFlowTilesTier({
+key:API_KEY,
+style:"relative"
+})
+);
 
 }catch(e){
+console.log(e);
+}
+
+});
+
+function categoryName(cat){
+
+switch(cat){
+
+case 1:
+return "Ongeval";
+
+case 6:
+return "File";
+
+case 7:
+return "Rijstrook afgesloten";
+
+case 8:
+return "Weg afgesloten";
+
+case 9:
+return "Werkzaamheden";
+
+case 14:
+return "Pechgeval";
+
+default:
+return "Verkeersmelding";
+
+}
+
+}
+
+function categoryClass(cat){
+
+switch(cat){
+
+case 1:
+return "accident";
+
+case 6:
+return "jam";
+
+case 8:
+return "closed";
+
+case 9:
+return "roadworks";
+
+default:
+return "jam";
+
+}
+
+}
+
+function markerColor(cat){
+
+switch(cat){
+
+case 1:
+return "red";
+
+case 6:
+return "orange";
+
+case 8:
+return "purple";
+
+case 9:
+return "cyan";
+
+default:
+return "yellow";
+
+}
+
+}
+
+async function loadIncidents(){
+
+try{
+
+markers.forEach(m=>m.remove());
+markers=[];
+
+const bbox = "3.2,50.7,7.3,53.7";
+
+const url =
+`https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&language=nl-NL&fields={incidents{type,geometry{type,coordinates},properties{id,iconCategory,from,to,length,delay,roadNumbers,events{description}}}}&key=${API_KEY}`;
+
+const res = await fetch(url);
+
+const data = await res.json();
+
+const incidents = data.incidents || [];
+
+document.getElementById("stats").innerHTML =
+`🚨 ${incidents.length} actuele incidenten`;
+
+let html="";
+
+incidents.slice(0,150).forEach(i=>{
+
+const p = i.properties;
+
+const category = p.iconCategory || 0;
+
+const title = categoryName(category);
+
+const road =
+(p.roadNumbers && p.roadNumbers.length)
+? p.roadNumbers.join(", ")
+: "Onbekende weg";
+
+const from = p.from || "";
+const to = p.to || "";
 
 html += `
-<div class="row">
-<div class="left">⚠️ ${p.name}</div>
-<div class="badge mid">geen data</div>
+<div class="incident ${categoryClass(category)}">
+
+<div class="incident-title">
+${title}
+</div>
+
+<div class="incident-road">
+${road}
+</div>
+
+<div class="incident-road">
+${from} ${to ? "→ "+to : ""}
+</div>
+
 </div>
 `;
 
+let coords;
+
+if(
+i.geometry &&
+i.geometry.coordinates
+){
+
+if(i.geometry.type==="LineString"){
+
+coords =
+i.geometry.coordinates[
+Math.floor(
+i.geometry.coordinates.length/2
+)
+];
+
+}else{
+
+coords = i.geometry.coordinates;
+
+}
+
+if(coords){
+
+const el = document.createElement("div");
+
+el.style.width="12px";
+el.style.height="12px";
+el.style.borderRadius="50%";
+el.style.background=markerColor(category);
+el.style.border="2px solid white";
+
+const marker =
+new tt.Marker({element:el})
+.setLngLat(coords)
+.addTo(map);
+
+markers.push(marker);
+
 }
 
 }
 
-document.getElementById("list").innerHTML = html;
+});
+
+document.getElementById("incidentList").innerHTML =
+html;
+
+}catch(error){
+
+console.error(error);
+
+document.getElementById("stats").innerHTML =
+"Fout bij laden incidenten";
 
 }
 
-load();
-setInterval(load,60000);
+}
+
+loadIncidents();
+
+setInterval(loadIncidents,60000);
 
 </script>
 
