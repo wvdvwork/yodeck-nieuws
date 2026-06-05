@@ -2,9 +2,8 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>NL Snelwegen - TomTom Traffic</title>
+<title>NL Snelwegen Live Traffic</title>
 
-<!-- TomTom Maps SDK -->
 <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
 
 <style>
@@ -30,8 +29,8 @@ body {
 
 .item {
     font-size: 12px;
+    padding: 6px;
     border-bottom: 1px solid #333;
-    padding: 6px 0;
 }
 
 .small {
@@ -44,7 +43,7 @@ body {
 <body>
 
 <div id="sidebar">
-    <h2>NL Snelwegen</h2>
+    <h2>🚗 NL Snelwegen</h2>
     <div id="status">Laden...</div>
     <h3>Files & Afsluitingen</h3>
     <div id="list"></div>
@@ -54,10 +53,9 @@ body {
 
 <script>
 
-// 🔑 API KEY
 const API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
-// 🗺️ TOMTOM MAP
+// 🗺 TomTom map
 const map = tt.map({
     key: API_KEY,
     container: "map",
@@ -65,50 +63,67 @@ const map = tt.map({
     zoom: 7
 });
 
-let layerGroup = [];
+// 📦 bbox in 3 delen (fix voor 10.000 km² limit)
+const BBOXES = [
+    "3.0%2C52.8%2C7.3%2C53.7", // noord
+    "3.0%2C51.8%2C7.3%2C52.8", // midden
+    "3.0%2C50.7%2C7.3%2C51.8"  // zuid
+];
 
-// 🚗 filter: alleen snelwegen
-function isHighway(roadNumbers) {
-    if (!roadNumbers) return false;
-    return roadNumbers.some(r => /^A\d+/.test(r));
+let objects = [];
+
+// 🚗 snelweg filter
+function isHighway(roads) {
+    if (!roads) return false;
+    return roads.some(r => /^A\d+/.test(r));
 }
 
-// 🚧 filter: files + afsluitingen
+// 🚧 file / afsluiting filter
 function isRelevant(events) {
     if (!events) return false;
 
-    return events.some(e =>
-        e.description?.toLowerCase().includes("file") ||
-        e.description?.toLowerCase().includes("afgesloten")
-    );
+    return events.some(e => {
+        const d = (e.description || "").toLowerCase();
+        return d.includes("file") || d.includes("afgesloten");
+    });
 }
 
-// 🔥 API call (TomTom Traffic)
-const API_URL =
+// 🧹 cleanup
+function clearMap() {
+    objects.forEach(o => o.remove());
+    objects = [];
+}
+
+// 🌐 API call per bbox
+async function fetchBox(bbox) {
+    const url =
 `https://api.tomtom.com/traffic/services/5/incidentDetails
-?bbox=3.0%2C50.7%2C7.3%2C53.7
+?bbox=${bbox}
 &fields=incidents{type,geometry,properties{id,from,to,roadNumbers,events}}
 &language=nl-NL
 &key=${API_KEY}`;
 
-function clearMap() {
-    layerGroup.forEach(l => l.remove());
-    layerGroup = [];
+    const res = await fetch(url);
+    return (await res.json()).incidents || [];
 }
 
+// 🔄 main loader
 async function loadTraffic() {
     try {
-        const res = await fetch(API_URL);
-        const data = await res.json();
-
-        const incidents = data.incidents || [];
-
         clearMap();
         document.getElementById("list").innerHTML = "";
 
+        let allIncidents = [];
+
+        // 🔥 meerdere requests parallel
+        const results = await Promise.all(BBOXES.map(fetchBox));
+
+        results.forEach(r => allIncidents.push(...r));
+
         let count = 0;
 
-        for (const i of incidents) {
+        for (const i of allIncidents) {
+
             const p = i.properties;
 
             if (!isHighway(p.roadNumbers)) continue;
@@ -119,27 +134,24 @@ async function loadTraffic() {
             const coords = i.geometry.coordinates.map(c => [c[1], c[0]]);
 
             const isClosed = p.events.some(e =>
-                e.description?.toLowerCase().includes("afgesloten")
+                (e.description || "").toLowerCase().includes("afgesloten")
             );
 
             const color = isClosed ? "red" : "orange";
 
-            // 🔴 TomTom polyline
-            const line = new tt.LngLatBounds();
-
-            coords.forEach(c => line.extend(c));
-
-            const polyline = new tt.Polyline({
+            // 🟠 polyline
+            const line = new tt.Polyline({
                 path: coords,
                 color: color,
                 width: 5
             }).addTo(map);
 
-            layerGroup.push(polyline);
+            objects.push(line);
 
             // 📋 sidebar
             const div = document.createElement("div");
             div.className = "item";
+
             div.innerHTML = `
                 <b>${p.from} → ${p.to}</b><br>
                 <span class="small">
@@ -153,12 +165,12 @@ async function loadTraffic() {
 
         document.getElementById("status").innerHTML =
             `Laatste update: ${new Date().toLocaleTimeString()}<br>` +
-            `Incidenten: ${count}`;
+            `Actieve incidenten: ${count}`;
 
     } catch (err) {
         console.error(err);
         document.getElementById("status").innerHTML =
-            "❌ API fout (check key / traffic access)";
+            "❌ Fout bij laden (check API key / traffic access)";
     }
 }
 
