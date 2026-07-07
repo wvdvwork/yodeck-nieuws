@@ -1,39 +1,198 @@
 <!DOCTYPE html>
-<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TomTom files Nederland</title>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Verkeer Nederland</title>
+
+<link rel="stylesheet" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css">
+
 <style>
-body{margin:0;background:#111;color:#fff;font-family:Arial}
-header{background:#123a6f;padding:20px;font-size:42px;font-weight:bold}
-#time{float:right;font-size:22px}
-table{width:100%;border-collapse:collapse}
-th,td{padding:14px;border-bottom:1px solid #333;text-align:left}
-th{background:#222}
-.red{color:#ff5b5b}.orange{color:#ffbf47}.green{color:#6be675}
-</style></head><body>
-<header>🚗 Actuele files Nederland <span id="time"></span></header>
-<table><thead><tr><th>Weg</th><th>Omschrijving</th><th>Lengte</th></tr></thead><tbody id="rows"><tr><td colspan="3">Laden...</td></tr></tbody></table>
-<script>
-const API_KEY="M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
-const bbox="3.314971,50.750383,7.227510,53.555214";
-async function load(){
- document.getElementById('time').textContent=new Date().toLocaleTimeString('nl-NL');
- const url=`https://api.tomtom.com/traffic/services/5/incidentDetails?key=${API_KEY}&bbox=${bbox}&fields={incidents{type,properties{roadNumbers,length,events{description}}}}&language=nl-NL`;
- try{
-   const r=await fetch(url);
-   const j=await r.json();
-   const tb=document.getElementById('rows'); tb.innerHTML='';
-   const arr=(j.incidents||[]).sort((a,b)=>(b.properties?.length||0)-(a.properties?.length||0));
-   if(!arr.length){tb.innerHTML="<tr><td colspan='3'>Geen files gevonden.</td></tr>";return;}
-   arr.slice(0,20).forEach(i=>{
-      const l=i.properties?.length||0;
-      const cls=l>8000?"red":l>3000?"orange":"green";
-      const road=(i.properties?.roadNumbers||["Onbekend"]).join(", ");
-      const desc=(i.properties?.events?.[0]?.description)||"Verkeershinder";
-      tb.insertAdjacentHTML("beforeend",`<tr><td>${road}</td><td>${desc}</td><td class="${cls}">${(l/1000).toFixed(1)} km</td></tr>`);
-   });
- }catch(e){
-   document.getElementById('rows').innerHTML="<tr><td colspan='3'>Fout bij ophalen TomTom API. Controleer endpoint/API-key/CORS.</td></tr>";
- }
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    background: #111;
 }
-load();setInterval(load,30000);
-</script></body></html>
+
+#header {
+    height: 8%;
+    background: #003b70;
+    color: white;
+    font-size: 32px;
+    font-weight: bold;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+#main {
+    height:92%;
+    display:flex;
+}
+
+#map {
+    width:72%;
+    height:100%;
+}
+
+#panel {
+    width:28%;
+    background:#111;
+    color:white;
+    padding:20px;
+    box-sizing:border-box;
+}
+
+h2 {
+    margin-top:0;
+}
+
+.file {
+    background:#222;
+    border-radius:8px;
+    padding:15px;
+    margin-bottom:12px;
+    font-size:20px;
+}
+
+.red {
+    border-left:8px solid red;
+}
+
+.orange {
+    border-left:8px solid orange;
+}
+
+.green {
+    border-left:8px solid limegreen;
+}
+
+.time {
+    margin-top:20px;
+    font-size:16px;
+    color:#ccc;
+}
+</style>
+
+</head>
+
+<body>
+
+<div id="header">
+🚗 ACTUELE VERKEERSINFORMATIE NEDERLAND
+</div>
+
+<div id="main">
+
+<div id="map"></div>
+
+<div id="panel">
+
+<h2>Top files</h2>
+
+<div class="file red">
+A1 Amersfoort - Apeldoorn<br>
+8 km file<br>
++15 minuten
+</div>
+
+<div class="file red">
+A2 Utrecht - Den Bosch<br>
+6 km file<br>
++10 minuten
+</div>
+
+<div class="file orange">
+A4 Amsterdam - Den Haag<br>
+Langzaam verkeer
+</div>
+
+<div class="file orange">
+A12 Den Haag - Utrecht<br>
+Druk verkeer
+</div>
+
+<div class="file green">
+Overige wegen<br>
+Goede doorstroming
+</div>
+
+<div class="time">
+Laatste update: <span id="clock"></span>
+</div>
+
+</div>
+
+</div>
+
+
+<script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
+
+<script>
+
+const TOMTOM_API_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
+
+
+const map = tt.map({
+    key: TOMTOM_API_KEY,
+    container: "map",
+
+    center: [5.4,52.2],
+
+    zoom: 7,
+
+    style:
+    "https://api.tomtom.com/style/2/custom/style/dG9tdG9tQEBAQ29udHJvbHM6Ljc1"
+});
+
+
+// Verkeerslaag toevoegen
+
+map.on("load", function(){
+
+    map.addTier({
+        key: TOMTOM_API_KEY,
+        tier: "flow"
+    });
+
+    map.addTier({
+        key: TOMTOM_API_KEY,
+        tier: "incidents"
+    });
+
+});
+
+
+// Klok
+
+function updateClock(){
+
+    let d = new Date();
+
+    document.getElementById("clock").innerHTML =
+    d.toLocaleTimeString("nl-NL");
+
+}
+
+setInterval(updateClock,1000);
+
+updateClock();
+
+
+// Pagina iedere minuut vernieuwen
+
+setInterval(function(){
+
+    location.reload();
+
+},60000);
+
+
+</script>
+
+</body>
+</html>
