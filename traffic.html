@@ -1,168 +1,39 @@
 <!DOCTYPE html>
-<html lang="nl">
-<head>
-<meta charset="UTF-8">
-<title>Actuele Files Nederland</title>
-
+<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TomTom files Nederland</title>
 <style>
-body{
-    margin:0;
-    background:#111;
-    color:white;
-    font-family:Arial,Helvetica,sans-serif;
-}
-
-header{
-    background:#d40000;
-    padding:25px;
-    font-size:42px;
-    font-weight:bold;
-}
-
-#update{
-    float:right;
-    font-size:22px;
-    font-weight:normal;
-}
-
-table{
-    width:100%;
-    border-collapse:collapse;
-}
-
-th{
-    background:#222;
-    padding:15px;
-    font-size:26px;
-    text-align:left;
-}
-
-td{
-    padding:18px;
-    font-size:28px;
-    border-bottom:1px solid #333;
-}
-
-.low{
-    color:#3adb76;
-}
-
-.medium{
-    color:#ffb400;
-}
-
-.high{
-    color:#ff4444;
-}
-
-.footer{
-    position:fixed;
-    bottom:0;
-    width:100%;
-    background:#222;
-    padding:12px;
-    text-align:center;
-    font-size:20px;
-}
-</style>
-
-</head>
-<body>
-
-<header>
-🚗 Actuele Files Nederland
-<span id="update"></span>
-</header>
-
-<table>
-
-<thead>
-<tr>
-<th>Weg</th>
-<th>Omschrijving</th>
-<th>Lengte</th>
-</tr>
-</thead>
-
-<tbody id="traffic">
-<tr><td colspan="3">Laden...</td></tr>
-</tbody>
-
-</table>
-
-<div class="footer">
-Automatisch vernieuwen iedere 60 seconden
-</div>
-
+body{margin:0;background:#111;color:#fff;font-family:Arial}
+header{background:#123a6f;padding:20px;font-size:42px;font-weight:bold}
+#time{float:right;font-size:22px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:14px;border-bottom:1px solid #333;text-align:left}
+th{background:#222}
+.red{color:#ff5b5b}.orange{color:#ffbf47}.green{color:#6be675}
+</style></head><body>
+<header>🚗 Actuele files Nederland <span id="time"></span></header>
+<table><thead><tr><th>Weg</th><th>Omschrijving</th><th>Lengte</th></tr></thead><tbody id="rows"><tr><td colspan="3">Laden...</td></tr></tbody></table>
 <script>
-
-const apiKey = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
-
-const bbox =
-"3.314971,50.750383,7.227510,53.555214";
-
-async function laadFiles(){
-
-const url=`https://api.tomtom.com/traffic/services/5/incidentDetails?key=${apiKey}&bbox=${bbox}&fields={incidents{type,geometry,properties{iconCategory,magnitudeOfDelay,length,events{description}}}}&language=nl-NL`;
-
-try{
-
-const response=await fetch(url);
-
-const json=await response.json();
-
-const tbody=document.getElementById("traffic");
-tbody.innerHTML="";
-
-let incidenten=json.incidents || [];
-
-incidenten=incidenten.filter(i=>i.properties.length>500);
-
-incidenten.sort((a,b)=>b.properties.length-a.properties.length);
-
-incidenten.slice(0,25).forEach(i=>{
-
-let kleur="low";
-
-if(i.properties.length>3000) kleur="medium";
-
-if(i.properties.length>8000) kleur="high";
-
-const tr=document.createElement("tr");
-
-const omschrijving=i.properties.events.length ?
-i.properties.events[0].description :
-"Verkeershinder";
-
-tr.innerHTML=`
-<td>A${i.properties.iconCategory}</td>
-<td>${omschrijving}</td>
-<td class="${kleur}">
-${(i.properties.length/1000).toFixed(1)} km
-</td>
-`;
-
-tbody.appendChild(tr);
-
-});
-
-document.getElementById("update").innerHTML=
-"Laatste update: "+new Date().toLocaleTimeString("nl-NL");
-
-}catch(e){
-
-document.getElementById("traffic").innerHTML=
-"<tr><td colspan='3'>Geen verbinding met TomTom API</td></tr>";
-
+const API_KEY="M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
+const bbox="3.314971,50.750383,7.227510,53.555214";
+async function load(){
+ document.getElementById('time').textContent=new Date().toLocaleTimeString('nl-NL');
+ const url=`https://api.tomtom.com/traffic/services/5/incidentDetails?key=${API_KEY}&bbox=${bbox}&fields={incidents{type,properties{roadNumbers,length,events{description}}}}&language=nl-NL`;
+ try{
+   const r=await fetch(url);
+   const j=await r.json();
+   const tb=document.getElementById('rows'); tb.innerHTML='';
+   const arr=(j.incidents||[]).sort((a,b)=>(b.properties?.length||0)-(a.properties?.length||0));
+   if(!arr.length){tb.innerHTML="<tr><td colspan='3'>Geen files gevonden.</td></tr>";return;}
+   arr.slice(0,20).forEach(i=>{
+      const l=i.properties?.length||0;
+      const cls=l>8000?"red":l>3000?"orange":"green";
+      const road=(i.properties?.roadNumbers||["Onbekend"]).join(", ");
+      const desc=(i.properties?.events?.[0]?.description)||"Verkeershinder";
+      tb.insertAdjacentHTML("beforeend",`<tr><td>${road}</td><td>${desc}</td><td class="${cls}">${(l/1000).toFixed(1)} km</td></tr>`);
+   });
+ }catch(e){
+   document.getElementById('rows').innerHTML="<tr><td colspan='3'>Fout bij ophalen TomTom API. Controleer endpoint/API-key/CORS.</td></tr>";
+ }
 }
-
-}
-
-laadFiles();
-
-setInterval(laadFiles,60000);
-
-</script>
-
-</body>
-</html>
+load();setInterval(load,30000);
+</script></body></html>
