@@ -15,23 +15,22 @@ html,body{
     height:100%;
     overflow:hidden;
     font-family:Arial,Helvetica,sans-serif;
-    background:#111;
 }
 
 #header{
-    height:8%;
+    height:8vh;
     background:#003b70;
     color:white;
     display:flex;
-    align-items:center;
     justify-content:center;
+    align-items:center;
     font-size:32px;
     font-weight:bold;
 }
 
-#content{
+#main{
+    height:92vh;
     display:flex;
-    height:92%;
 }
 
 #map{
@@ -53,8 +52,8 @@ h2{
 
 .item{
     background:#222;
-    padding:12px;
     margin-bottom:12px;
+    padding:12px;
     border-radius:8px;
     font-size:18px;
 }
@@ -72,34 +71,36 @@ h2{
 }
 
 .small{
-    font-size:14px;
     color:#ccc;
+    margin-top:15px;
 }
 
 </style>
-</head>
 
+</head>
 
 <body>
 
 <div id="header">
-🚗 VERKEER NEDERLAND
+🚗 ACTUEEL VERKEER NEDERLAND
 </div>
 
-<div id="content">
+
+<div id="main">
 
 <div id="map"></div>
 
+
 <div id="side">
 
-<h2>Files</h2>
+<h2>Files & incidenten</h2>
 
 <div id="files">
 Laden...
 </div>
 
 <div class="small">
-Laatste update:
+Update:
 <span id="time"></span>
 </div>
 
@@ -108,15 +109,17 @@ Laatste update:
 </div>
 
 
+
 <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
 
 
 <script>
 
-const TOMTOM_KEY="M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
+
+const TOMTOM_KEY = "M7ToFG8ppZQ2JGKPxLHvvsO2w0Yql8cu";
 
 
-// Kaart
+// KAART
 
 const map = tt.map({
 
@@ -126,64 +129,44 @@ const map = tt.map({
 
     center:[5.4,52.2],
 
-    zoom:7,
-
-    style:"https://api.tomtom.com/style/2/basic_main.json"
+    zoom:7
 
 });
 
-
-// Verkeerslaag
 
 map.on("load",function(){
 
-    map.addSource("traffic",{
-
-        type:"raster",
-
-        tiles:[
-        "https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key="
-        + TOMTOM_KEY
-        ],
-
-        tileSize:256
-    });
-
-
-    map.addLayer({
-
-        id:"traffic",
-
-        type:"raster",
-
-        source:"traffic",
-
-        opacity:0.8
-
-    });
-
+    console.log("TomTom kaart OK");
 
 });
 
 
 
-// Incidenten ophalen
+// FILES OPHALEN
 
 async function loadTraffic(){
 
+
+const url =
+"https://api.tomtom.com/traffic/services/5/incidentDetails/s3/"
++
+"3.2,50.7,7.3,53.6"
++
+"?key="+TOMTOM_KEY
++
+"&language=nl-NL";
+
+
 try{
 
-let url =
-"https://api.tomtom.com/traffic/services/5/incidentDetails"
-+
-"?bbox=3.3,50.7,7.3,53.6"
-+
-"&key="+TOMTOM_KEY;
+
+const response = await fetch(url);
 
 
-let response=await fetch(url);
+const data = await response.json();
 
-let data=await response.json();
+
+console.log(data);
 
 
 let html="";
@@ -192,23 +175,24 @@ let html="";
 if(data.tm && data.tm.poi){
 
 
-data.tm.poi.slice(0,8).forEach(function(f){
+data.tm.poi.slice(0,10).forEach(function(item){
 
 
 let kleur="orange";
 
 
-if(f.ic){
+if(item.ic){
 kleur="red";
 }
 
 
-html +=
-`
+html += `
+
 <div class="item ${kleur}">
-<b>${f.dl || "Verkeersmelding"}</b><br>
-${f.f || ""}
+<b>${item.dl || "Verkeersmelding"}</b><br>
+${item.f || ""}
 </div>
+
 `;
 
 });
@@ -218,7 +202,10 @@ ${f.f || ""}
 
 
 if(html===""){
-html='<div class="item green">Geen grote files gemeld</div>';
+
+html=
+'<div class="item green">Geen grote files gemeld</div>';
+
 }
 
 
@@ -227,10 +214,15 @@ document.getElementById("files").innerHTML=html;
 
 }
 
-catch(e){
+catch(error){
+
+
+console.log(error);
+
 
 document.getElementById("files").innerHTML=
-'<div class="item red">Kan verkeersdata niet laden</div>';
+
+'<div class="item red">Geen verkeersdata</div>';
 
 }
 
@@ -242,15 +234,16 @@ new Date().toLocaleTimeString("nl-NL");
 }
 
 
+
 loadTraffic();
 
-
-// elke minuut vernieuwen
 
 setInterval(loadTraffic,60000);
 
 
+
 </script>
+
 
 </body>
 </html>
